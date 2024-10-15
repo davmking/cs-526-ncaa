@@ -10,3 +10,70 @@ library(tidyverse)
 library(ncaahoopR)
 ```
 
+# Get 2024 Tournament
+
+```{r}
+dates_2024 <- c("2024-03-19", "2024-03-20",
+                "2024-03-21", "2024-03-22", "2024-03-23", "2024-03-24",
+                "2024-03-28", "2024-03-29", "2024-03-30", "2024-03-31",
+                "2024-04-06", "2024-04-08")
+
+games_2024 <- get_master_schedule(dates_2024[1])
+
+for(i in 2:length(dates_2024)){
+  games_2024 <- rbind(games_2024, get_master_schedule(dates_2024[i]))
+}
+
+games_2024 <- games_2024 %>% 
+  filter(!grepl("NIT", away) &
+         !grepl("CBI", away) &
+         !grepl("CIT", away))
+
+pbp_2024 <- get_pbp_game(games_2024$game_id)
+```
+
+# Data Wrangling
+
+```{r}
+pbp_2024 <- games_2024 %>% 
+  select(game_id, away_rank, home_rank) %>% 
+  rename(away_seed = away_rank, home_seed = home_rank) %>% 
+  right_join(pbp_2024, by = "game_id")
+
+pbp_2024 <- pbp_2024 %>% 
+  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
+
+pbp_2024 %>% 
+  filter(referee_1 == "") %>% 
+  select(game_id) %>% 
+  distinct()
+# Only one game missing referees
+
+pbp_2024 <- pbp_2024 %>% 
+  mutate(referee_1 = if_else(referee_1 == "", NA, referee_1))
+
+game_info_2024 <- pbp_2024 %>% 
+  group_by(game_id) %>% 
+  slice_max(play_id) %>% 
+  ungroup() %>% 
+  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
+  select(game_id, date, home, away, home_seed, away_seed, home_score,
+         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
+         home_favored_by, total_line, referee_1, referee_2, referee_3,
+         arena_location, arena, capacity, attendance, overtime_game)
+```
+
+
+# Exploration
+
+```{r}
+pbp_2024 %>% 
+  filter(game_id == 401638580) %>% 
+  select(win_prob, naive_win_prob, secs_remaining_absolute) %>% 
+  pivot_longer(-secs_remaining_absolute, names_to = "type", values_to = "prob") %>% 
+  ggplot(aes(x = -secs_remaining_absolute, y = prob, fill = type)) +
+  geom_line()
+# Unclear what exactly is different in Naive, other than it maybe doesn't have a prior
+```
+
+
