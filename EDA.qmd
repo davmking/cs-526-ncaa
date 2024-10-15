@@ -8,9 +8,12 @@ format: html
 ```{r}
 library(tidyverse)
 library(ncaahoopR)
+library(viridis)
 ```
 
-# Get 2024 Tournament
+# Get Tournaments
+
+## 2024
 
 ```{r}
 dates_2024 <- c("2024-03-19", "2024-03-20",
@@ -32,7 +35,76 @@ games_2024 <- games_2024 %>%
 pbp_2024 <- get_pbp_game(games_2024$game_id)
 ```
 
+## 2023
+
+```{r}
+dates_2023 <- c("2023-03-14", "2023-03-15",
+                "2023-03-16", "2023-03-17", "2023-03-18", "2023-03-19",
+                "2023-03-23", "2023-03-24", "2023-03-25", "2023-03-26",
+                "2023-04-01", "2023-04-03")
+
+games_2023 <- get_master_schedule(dates_2023[1])
+
+for(i in 2:length(dates_2023)){
+  games_2023 <- rbind(games_2023, get_master_schedule(dates_2023[i]))
+}
+
+games_2023 <- games_2023 %>% 
+  filter(!grepl("NIT", away) &
+         !grepl("CBI", away) &
+         !grepl("CIT", away))
+
+pbp_2023 <- get_pbp_game(games_2023$game_id)
+```
+
+## 2022
+
+```{r}
+dates_2022 <- c("2022-03-15", "2022-03-16",
+                "2022-03-17", "2022-03-18", "2022-03-19", "2022-03-20",
+                "2022-03-24", "2022-03-25", "2022-03-26", "2022-03-27",
+                "2022-04-02", "2022-04-04")
+
+games_2022 <- get_master_schedule(dates_2022[1])
+
+for(i in 2:length(dates_2022)){
+  games_2022 <- rbind(games_2022, get_master_schedule(dates_2022[i]))
+}
+
+games_2022 <- games_2022 %>% 
+  filter(!grepl("NIT", away) &
+         !grepl("CBI", away) &
+         !grepl("CIT", away) &
+         !grepl("Classic", away))
+
+pbp_2022 <- get_pbp_game(games_2022$game_id)
+```
+
+## 2021
+
+```{r}
+dates_2021 <- c("2021-03-18",
+                "2021-03-19", "2021-03-20", "2021-03-21", "2021-03-22",
+                "2021-03-27", "2021-03-28", "2021-03-29", "2021-03-30",
+                "2021-04-03", "2021-04-05")
+
+games_2021 <- get_master_schedule(dates_2021[1])
+
+for(i in 2:length(dates_2021)){
+  games_2021 <- rbind(games_2021, get_master_schedule(dates_2021[i]))
+}
+
+games_2021 <- games_2021 %>% 
+  filter(!grepl("NIT", away) &
+         !grepl("CBI", away) &
+         !grepl("CIT", away))
+
+pbp_2021 <- get_pbp_game(games_2021$game_id)
+```
+
 # Data Wrangling
+
+## 2024
 
 ```{r}
 pbp_2024 <- games_2024 %>% 
@@ -68,6 +140,107 @@ game_info_2024 <- pbp_2024 %>%
          pct_attendance = attendance / capacity)
 ```
 
+## 2023
+
+```{r}
+pbp_2023 <- games_2023 %>% 
+  select(game_id, away_rank, home_rank) %>% 
+  rename(away_seed = away_rank, home_seed = home_rank) %>% 
+  right_join(pbp_2023, by = "game_id")
+
+pbp_2023 <- pbp_2023 %>% 
+  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
+
+pbp_2023 %>% 
+  filter(referee_1 == "") %>% 
+  select(game_id) %>% 
+  distinct()
+# Zero games missing referees
+
+game_info_2023 <- pbp_2023 %>% 
+  group_by(game_id) %>% 
+  slice_max(play_id) %>% 
+  ungroup() %>% 
+  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
+  select(game_id, date, home, away, home_seed, away_seed, home_score,
+         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
+         home_favored_by, total_line, referee_1, referee_2, referee_3,
+         arena_location, arena, capacity, attendance, overtime_game) %>% 
+  mutate(total_scored = home_score + away_score,
+         over_under = total_scored - total_line,
+         line_error = score_diff - home_favored_by,
+         abs_line_error = abs(line_error),
+         pct_attendance = attendance / capacity)
+```
+
+## 2022
+
+```{r}
+pbp_2022 <- games_2022 %>% 
+  select(game_id, away_rank, home_rank) %>% 
+  rename(away_seed = away_rank, home_seed = home_rank) %>% 
+  right_join(pbp_2022, by = "game_id")
+
+pbp_2022 <- pbp_2022 %>% 
+  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
+
+pbp_2022 %>% 
+  filter(referee_1 == "") %>% 
+  select(game_id) %>% 
+  distinct()
+# Zero games missing referees
+
+game_info_2022 <- pbp_2022 %>% 
+  group_by(game_id) %>% 
+  slice_max(play_id) %>% 
+  ungroup() %>% 
+  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
+  select(game_id, date, home, away, home_seed, away_seed, home_score,
+         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
+         home_favored_by, total_line, referee_1, referee_2, referee_3,
+         arena_location, arena, capacity, attendance, overtime_game) %>% 
+  mutate(total_scored = home_score + away_score,
+         over_under = total_scored - total_line,
+         line_error = score_diff - home_favored_by,
+         abs_line_error = abs(line_error),
+         pct_attendance = attendance / capacity)
+```
+
+## 2021
+
+```{r}
+pbp_2021 <- games_2021 %>% 
+  select(game_id, away_rank, home_rank) %>% 
+  rename(away_seed = away_rank, home_seed = home_rank) %>% 
+  right_join(pbp_2021, by = "game_id")
+
+pbp_2021 <- pbp_2021 %>% 
+  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
+
+pbp_2021 %>% 
+  filter(referee_1 == "") %>% 
+  select(game_id) %>% 
+  distinct()
+# Zero games missing referees
+
+game_info_2021 <- pbp_2021 %>% 
+  group_by(game_id) %>% 
+  slice_max(play_id) %>% 
+  ungroup() %>% 
+  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
+  select(game_id, date, home, away, home_seed, away_seed, home_score,
+         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
+         home_favored_by, total_line, referee_1, referee_2, referee_3,
+         arena_location, arena, capacity, attendance, overtime_game) %>% 
+  mutate(total_scored = home_score + away_score,
+         over_under = total_scored - total_line,
+         line_error = score_diff - home_favored_by,
+         abs_line_error = abs(line_error),
+         pct_attendance = attendance / capacity)
+```
+
+Note: Due to COVID-19 protocols, one game was canceled.
+
 
 # Exploration
 
@@ -81,4 +254,73 @@ pbp_2024 %>%
 # Unclear what exactly is different in Naive, other than it maybe doesn't have a prior
 ```
 
+## Referees
+
+```{r}
+game_info_2024 %>% 
+  select(starts_with("referee")) %>% 
+  pivot_longer(everything(), names_to = "order", values_to = "ref") %>% 
+  group_by(ref) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  filter(n >= 4) %>% 
+  ggplot(aes(x = n, y = reorder(ref, n))) +
+  geom_col()
+# They're still letting Roger Ayers at it, huh?
+
+game_info_2024 %>% 
+  filter(overtime_game == F) %>% 
+  select(starts_with("referee"), over_under) %>% 
+  pivot_longer(-over_under, names_to = "order", values_to = "ref") %>% 
+  group_by(ref) %>% 
+  summarize(ou_error = mean(over_under),
+            n_appearances = n()) %>% 
+  ungroup() %>% 
+  filter(n_appearances > 1) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = ou_error, y = reorder(ref, ou_error),
+             fill = factor(n_appearances))) +
+  geom_col() +
+  labs(x = "Total Score minus Total Line",
+       y = "Referee",
+       fill = "Number of Games Officiated",
+       title = "Average Over/Under Error by Referee") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_fill_viridis(discrete = T, option = "B")
+
+
+game_info_2024 %>% 
+  filter(overtime_game == F) %>%
+  select(starts_with("referee"), line_error, abs_line_error) %>% 
+  pivot_longer(starts_with("referee"), names_to = "order", values_to = "ref") %>% 
+  pivot_longer(ends_with("line_error"), names_to = "type", values_to = "error") %>% 
+  group_by(ref, type) %>% 
+  summarize(avg_error = mean(error),
+            n_appearances = n()) %>% 
+  ungroup() %>% 
+  filter(n_appearances > 1) %>% 
+  mutate(type = case_when(
+    type == "abs_line_error" ~ "Absolute",
+    type == "line_error" ~ "Relative",
+    T ~ NA
+  )) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = avg_error, y = reorder(ref, avg_error),
+             fill = factor(n_appearances))) +
+  geom_col() +
+  facet_wrap(~type, scales = "free_x") +
+  labs(x = "Line Error",
+       y = "Referee",
+       fill = "Number of Games Officiated",
+       title = "Average Line Error by Referee") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_fill_viridis(discrete = T, option = "B")
+```
+
+Note: This is really a trend that needs to be sorted over more years.
 
