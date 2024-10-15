@@ -3,3 +3,10 @@ title: "EDA"
 format: html
 ---
 
+# Libraries
+
+```{r}
+library(tidyverse)
+library(ncaahoopR)
+```
+
