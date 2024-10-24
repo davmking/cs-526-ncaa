@@ -9,6 +9,7 @@ format: html
 library(tidyverse)
 library(ncaahoopR)
 library(viridis)
+library(tidytext)
 ```
 
 # Data Setup
@@ -31,6 +32,21 @@ game_info_long <- game_info_long %>%
   mutate(tournament = year(date), .before = "date") %>% 
   mutate(tournament = factor(tournament))
 ```
+
+## PBP Data
+
+```{r}
+pbp_data_long <- data.frame(pbp_data[["pbp_2024"]])
+
+for(i in 2:length(pbp_data)){
+  pbp_data_long <- rbind(pbp_data_long, pbp_data[[i]])
+}
+
+pbp_data_long <- pbp_data_long %>% 
+  mutate(tournament = year(date), .after = "game_id") %>% 
+  mutate(tournament = factor(tournament))
+```
+
 
 
 
@@ -129,6 +145,108 @@ game_info_long %>%
   head(20) %>% 
   ggplot(aes(x = n, y = reorder(ref, n))) +
   geom_col()
+
+game_info_long %>% 
+  filter(overtime_game == F) %>% 
+  select(starts_with("referee"), over_under) %>% 
+  pivot_longer(-over_under, names_to = "order", values_to = "ref") %>% 
+  group_by(ref) %>% 
+  summarize(ou_error = mean(over_under, na.rm = TRUE),
+            n_appearances = n()) %>% 
+  ungroup() %>% 
+  filter(n_appearances > 1) %>% 
+  na.omit() %>% 
+  filter(n_appearances >= 10) %>% 
+  ggplot(aes(x = ou_error, y = reorder(ref, ou_error),
+             fill = n_appearances)) +
+  geom_col() +
+  labs(x = "Total Score minus Total Line",
+       y = "Referee",
+       fill = "Number of Games Officiated",
+       title = "Average Over/Under Error by Referee") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_fill_viridis(discrete = F, option = "B")
+# There's some really remarkable findings here - how do you officiate 10+ games
+# and on average the under hits by more than 20?
+
+
+game_info_long %>% 
+  filter(overtime_game == F) %>%
+  select(starts_with("referee"), line_error, abs_line_error) %>% 
+  pivot_longer(starts_with("referee"), names_to = "order", values_to = "ref") %>% 
+  pivot_longer(ends_with("line_error"), names_to = "type", values_to = "error") %>% 
+  group_by(ref, type) %>% 
+  summarize(avg_error = mean(error, na.rm = T),
+            n_appearances = n()) %>% 
+  ungroup() %>% 
+  filter(n_appearances >= 10) %>% 
+  mutate(type = case_when(
+    type == "abs_line_error" ~ "Absolute",
+    type == "line_error" ~ "Relative",
+    T ~ NA
+  )) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = avg_error, y = reorder(ref, avg_error),
+             fill = n_appearances)) +
+  geom_col() +
+  facet_wrap(~type, scales = "free_x") +
+  labs(x = "Line Error",
+       y = "Referee",
+       fill = "Number of Games Officiated",
+       title = "Average Line Error by Referee") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_fill_viridis(discrete = F, option = "B")
+# Generally not too insane? But maybe sometimes they are
+# Some of these are pretty impressive, though
 ```
+
+### Who calls the most fouls?
+
+```{r}
+pbp_data_long %>% 
+  select(description) %>% 
+  unnest_tokens(word, description) %>% 
+  group_by(word) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  filter(n > 1000) %>% 
+  print(n = 79)
+# Foul is the 10th most common word, with 22,731 occurrences
+
+pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("foul on", description)) %>% 
+  semi_join((game_info_long %>% 
+               filter(overtime_game == FALSE)), by = "game_id") %>% 
+  select(starts_with("referee"), game_id) %>% 
+  pivot_longer(-game_id, names_to = "order", values_to = "ref") %>% 
+  group_by(ref) %>% 
+  summarize(n = n(), n_games = n_distinct(game_id)) %>% 
+  ungroup() %>% 
+  mutate(fouls_per_game = n / n_games) %>% 
+  arrange(desc(fouls_per_game)) %>% 
+  na.omit() %>% 
+  filter(n_games >= 10) %>% 
+  slice(c(1:10, (n() - 9):n())) %>%
+  mutate(level = if_else(fouls_per_game > 32, "Highest", "Lowest")) %>% 
+  ggplot(aes(x = fouls_per_game, y = reorder(ref, fouls_per_game),
+             fill = n_games)) +
+  geom_col() +
+  facet_wrap(~level, scales = "free_y") +
+  theme_bw() +
+  labs(x = "Fouls Per Game", y = "Referee",
+       title = "Referees Calling Games with the Most Fouls") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none") +
+  scale_fill_viridis(option = "B")
+# No huge discrepancies, but there's definitely some variance
+# TV Teddy actually doesn't call nearly as many fouls as I would expect
+```
+
 
 
