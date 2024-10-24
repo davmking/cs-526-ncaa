@@ -10,6 +10,7 @@ library(tidyverse)
 library(ncaahoopR)
 library(viridis)
 library(tidytext)
+library(ggridges)
 ```
 
 # Data Setup
@@ -151,14 +152,15 @@ game_info_long %>%
   select(starts_with("referee"), over_under) %>% 
   pivot_longer(-over_under, names_to = "order", values_to = "ref") %>% 
   group_by(ref) %>% 
+  na.omit() %>% 
   summarize(ou_error = mean(over_under, na.rm = TRUE),
             n_appearances = n()) %>% 
   ungroup() %>% 
-  filter(n_appearances > 1) %>% 
+  filter(n_appearances > 2) %>% 
   na.omit() %>% 
-  filter(n_appearances >= 10) %>% 
+  #filter(n_appearances >= 10) %>% 
   ggplot(aes(x = ou_error, y = reorder(ref, ou_error),
-             fill = n_appearances)) +
+             fill = factor(n_appearances))) +
   geom_col() +
   labs(x = "Total Score minus Total Line",
        y = "Referee",
@@ -167,9 +169,8 @@ game_info_long %>%
   theme_bw() +
   theme(plot.title = element_text(hjust = 0.5),
         legend.position = "bottom") +
-  scale_fill_viridis(discrete = F, option = "B")
-# There's some really remarkable findings here - how do you officiate 10+ games
-# and on average the under hits by more than 20?
+  scale_fill_viridis(discrete = T, option = "B")
+# The findings are much less remarkable when we handle this correctly lol
 
 
 game_info_long %>% 
@@ -178,10 +179,11 @@ game_info_long %>%
   pivot_longer(starts_with("referee"), names_to = "order", values_to = "ref") %>% 
   pivot_longer(ends_with("line_error"), names_to = "type", values_to = "error") %>% 
   group_by(ref, type) %>% 
+  na.omit() %>% 
   summarize(avg_error = mean(error, na.rm = T),
             n_appearances = n()) %>% 
   ungroup() %>% 
-  filter(n_appearances >= 10) %>% 
+  filter(n_appearances >= 5) %>% 
   mutate(type = case_when(
     type == "abs_line_error" ~ "Absolute",
     type == "line_error" ~ "Relative",
@@ -282,6 +284,33 @@ pbp_data_long %>%
 # Definitely some home cooking, but that's to be expected
 # Higher seed = better team = less likely to commit fouls
 ```
+
+
+### Check Betting Lines
+
+Just to make sure - do betting lines significantly differ by tournament?
+
+```{r}
+game_info_long %>% 
+  select(tournament, total_line) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = total_line, fill = tournament)) +
+  geom_density(alpha = 0.5)
+# Over under lines def higher in 2024 than 2023
+
+game_info_long %>% 
+  select(tournament, home_favored_by) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = home_favored_by, y = tournament, fill = tournament)) +
+  geom_density_ridges(alpha = 0.5) +
+  theme_bw() +
+  labs(x = "Home Team Favored By", y = "Year",
+       title = "Have Point Spreads Changed over Time?") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none")
+# Not much change over time tbh
+```
+
 
 
 
