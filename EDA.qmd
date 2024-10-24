@@ -246,6 +246,41 @@ pbp_data_long %>%
   scale_fill_viridis(option = "B")
 # No huge discrepancies, but there's definitely some variance
 # TV Teddy actually doesn't call nearly as many fouls as I would expect
+
+pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("foul on", description)) %>% 
+  semi_join((game_info_long %>% 
+               filter(overtime_game == FALSE)), by = "game_id") %>% 
+  select(starts_with("referee"), game_id, action_team) %>% 
+  na.omit() %>% 
+  pivot_longer(starts_with("referee"), names_to = "order", values_to = "ref") %>% 
+  group_by(ref, action_team) %>% 
+  summarize(n = n(), n_games = n_distinct(game_id)) %>% 
+  ungroup() %>% 
+  mutate(fouls_per_game = n / n_games) %>% 
+  pivot_wider(names_from = action_team, 
+              values_from = c(n, fouls_per_game)) %>% 
+  mutate(home_advantage_raw = n_home - n_away,
+         home_advantage_pg = fouls_per_game_home - fouls_per_game_away,
+         discrepancy_raw = abs(home_advantage_raw),
+         discrepancy_pg = abs(home_advantage_pg)) %>% 
+  filter(n_games >= 10) %>% 
+  arrange(desc(discrepancy_pg)) %>% 
+  slice(c(1:10, (n() - 9):n())) %>% 
+  mutate(level = if_else(discrepancy_pg > 2, "Highest", "Lowest")) %>% 
+  ggplot(aes(x = -home_advantage_pg, y = reorder(ref, discrepancy_pg),
+             fill = if_else(home_advantage_pg < 0, T, F))) +
+  geom_col() +
+  facet_wrap(~level, scales = "free") +
+  theme_bw() +
+  labs(x = "Home Team Fouls Advantage Per Game", y = "Referee",
+       title = "Home Team Foul Advantage", fill = "Favors Home Team") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_fill_viridis(discrete = T, direction = -1)
+# Definitely some home cooking, but that's to be expected
+# Higher seed = better team = less likely to commit fouls
 ```
 
 
