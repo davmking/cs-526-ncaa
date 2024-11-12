@@ -85,3 +85,38 @@ basic_stats %>%
 ```
 
 
+```{r}
+basic_stats %>% 
+  mutate(school_clean_2 = case_when(
+    school_clean == "Abilene Christian" ~ "Abilene Chrstn",
+    school_clean == "Albany (NY)" ~ "UAlbany",
+    school_clean == "Appalachian State" ~ "App State",
+    school_clean == "Arizona State" ~ "Arizona St",
+    school_clean == "Boise State" ~ "Boise St",
+    school_clean == "Brigham Young" ~ "BYU",
+    school_clean == "Cal State Bakersfield" ~ "Bakersfield",
+    school_clean == "Cal State Fullerton" ~ "Fullerton",
+    school_clean == "Cleveland State" ~ "Cleveland St",
+    school_clean == "Coastal Carolina" ~ "Coastal Car",
+    school_clean == "College of Charleston" ~ "Charleston",
+    school_clean == "Colorado State" ~ "Colorado St",
+    school_clean == "Connecticut" ~ "UConn",
+    school_clean == "East Tennessee State" ~ "ETSU",
+    school_clean == "Eastern Kentucky" ~ "E Kentucky",
+    school_clean == "Eastern Washington" ~ "E Washington",
+    school_clean == "FDU" ~ "Fair Dickinson",
+    school_clean == "Florida Atlantic" ~ "FAU",
+    school_clean == "Florida Gulf Coast" ~ "FGCU",
+    school_clean == "Florida State" ~ "Florida St",
+    school_clean == "Fresno State" ~ "Fresno St",
+    school_clean == "George Washington" ~ "G Washington",
+    school_clean == "Georgia State" ~ "Georgia St",
+    school_clean == "Hawaii" ~ "Hawai'i",
+    school_clean == "Jacksonville State" ~ "Jax State",
+    school_clean == "Kansas State" ~ "Kansas St",
+    school_clean == "Kennesaw State" ~ "Kennesaw St",
+    school_clean == "Long Beach State" ~ "Long Beach St",
+    school_clean == 
+  ))
+```
+
