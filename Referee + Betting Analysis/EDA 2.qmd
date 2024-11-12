@@ -68,6 +68,20 @@ basic_stats %>%
   filter(year == 2014) %>% 
   select(school_clean) %>% 
   pull()
+
+
+tournament_fouls %>%  
+  group_by(team_on) %>% 
+  summarize() %>% 
+  pull(team_on) %>% 
+  sort()
+
+basic_stats %>% 
+  filter(year >= 2014 & grepl("NCAA", school)) %>% 
+  group_by(school, school_clean) %>% 
+  summarize() %>% 
+  pull(school_clean) %>% 
+  sort()
 ```
 
 
