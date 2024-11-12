@@ -1,0 +1,73 @@
+---
+title: "EDA 2"
+format: html
+---
+
+# Libraries and Data
+
+```{r}
+#| label: libraries
+
+library(tidyverse)
+library(tidytext)
+```
+
+```{r}
+basic_stats <- read.csv("FeatureElimination/Basic_Stats.csv") %>% 
+  janitor::clean_names() %>%
+  mutate(school_clean = if_else(
+    str_detect(school, "NCAA"),
+    substring(school, 1, nchar(school) - 5),
+    school
+  ), .after = school)
+
+load("data/game_info.RData")
+load("data/pbp_data.RData")
+
+pbp_data_long <- data.frame(pbp_data[["pbp_2024"]])
+
+for(i in 2:length(pbp_data)){
+  pbp_data_long <- rbind(pbp_data_long, pbp_data[[i]])
+}
+
+pbp_data_long <- pbp_data_long %>% 
+  mutate(tournament = year(date), .after = "game_id") %>% 
+  mutate(tournament = factor(tournament))
+```
+
+
+# Fouls per Season vs Tournament
+
+```{r}
+tournament_fouls <- pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("foul on", description)) %>% 
+  mutate(team_on = case_when(
+    action_team == "home" ~ home,
+    action_team == "away" ~ away,
+    TRUE ~ NA
+  )) %>% 
+  group_by(tournament, team_on) %>% 
+  summarize(n_fouls = n(),
+            n_games = n_distinct(game_id)) %>% 
+  ungroup() %>% 
+  mutate(fouls_per_game = n_fouls / n_games)
+
+basic_stats %>% 
+  mutate(school_clean = str_replace(school_clean, "State", "St")) %>% 
+  group_by(year, school_clean) %>% 
+  summarize(fouls = pf,
+            fouls_per_game_season = pf / games_played) %>% 
+  ungroup() %>% 
+  mutate(year = factor(year)) %>% 
+  right_join(tournament_fouls, by = c("year" = "tournament",
+                                      "school_clean" = "team_on")) %>% 
+  filter(is.na(fouls))
+
+basic_stats %>% 
+  filter(year == 2014) %>% 
+  select(school_clean) %>% 
+  pull()
+```
+
+
