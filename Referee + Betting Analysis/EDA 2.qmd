@@ -254,3 +254,79 @@ fouls_df %>%
 ```
 
 
+```{r}
+foul_diff_df <- pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("foul on", description)) %>% 
+  mutate(team_on = case_when(
+    action_team == "home" ~ home,
+    action_team == "away" ~ away,
+    TRUE ~ NA
+  ), team_on_seed = case_when(
+    action_team == "home" ~ home_seed,
+    action_team == "away" & away_seed <= 16 ~ away_seed,
+    TRUE ~ NA
+  )) %>% 
+  group_by(game_id, tournament, team_on, team_on_seed) %>% 
+  summarize(n_fouls = n()) %>% 
+  ungroup() %>% 
+  left_join(basic_stats %>% mutate(year = factor(year)),
+            by = c("tournament" = "year", 
+                                "team_on" = "school_clean_dict")) %>% 
+  mutate(avg_fouls_season = pf / games_played,
+         foul_diff = n_fouls - avg_fouls_season) %>% 
+  left_join(game_info_long %>% select(game_id, starts_with("referee")),
+            by = "game_id")
+
+fd_mean <- mean(foul_diff_df$foul_diff, na.rm = TRUE)
+fd_sd <- sd(foul_diff_df$foul_diff, na.rm = TRUE)
+
+ggplot(foul_diff_df, aes(x = foul_diff)) +
+  geom_density(fill = "grey") 
+
+summary(foul_diff_df$foul_diff)
+sd(foul_diff_df$foul_diff, na.rm = TRUE)
+
+sd_2 <- c(fd_mean - 2 * fd_sd, fd_mean + 2 * fd_sd)
+
+ref_counts <- game_info_long %>% 
+  select(starts_with("referee")) %>% 
+  pivot_longer(everything(), values_to = "referee") %>% 
+  group_by(referee) %>% 
+  summarize(total_games_reffed = n())
+
+foul_diff_df %>% 
+  filter(foul_diff <= sd_2[1] | foul_diff >= sd_2[2]) %>% 
+  select(tournament, team_on, team_on_seed, n_fouls, avg_fouls_season, foul_diff,
+         starts_with("referee")) %>% 
+  pivot_longer(starts_with("referee"), names_to = "ref_id",
+               values_to = "referee") %>% 
+  group_by(referee) %>% 
+  summarize(n_occurences = n(),
+            mean_diff = mean(foul_diff),
+            mean_abs_diff = mean(abs(foul_diff))) %>% 
+  ungroup() %>% 
+  left_join(ref_counts, by = "referee") %>% 
+  mutate(pct_of_games_reffed = n_occurences / total_games_reffed) %>% 
+  arrange(desc(n_occurences))
+# Generally it is 15-20% of their games refereed, at least for the top offenders
+
+foul_diff_df %>% 
+  filter(foul_diff <= sd_2[1] | foul_diff >= sd_2[2]) %>% 
+  select(tournament, team_on, team_on_seed, n_fouls, avg_fouls_season, foul_diff,
+         starts_with("referee")) %>% 
+  pivot_longer(starts_with("referee"), names_to = "ref_id",
+               values_to = "referee") %>% 
+  group_by(referee) %>% 
+  summarize(n_occurences = n(),
+            mean_diff = mean(foul_diff),
+            mean_abs_diff = mean(abs(foul_diff))) %>% 
+  ungroup() %>% 
+  left_join(ref_counts, by = "referee") %>% 
+  mutate(pct_of_games_reffed = n_occurences / total_games_reffed) %>% 
+  ggplot(aes(x = pct_of_games_reffed)) +
+  geom_density(fill = "grey")
+```
+
+
+
