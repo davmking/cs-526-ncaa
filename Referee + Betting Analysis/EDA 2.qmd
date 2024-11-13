@@ -472,6 +472,52 @@ pred_winner_foul_diff <- logistic_reg() %>%
   fit(projected_winner ~ foul_diff, data = predicting_winners_home)
 
 tidy(pred_winner_foul_diff) # Not significant
+
+
+predicting_winners_home_2 <- predicting_winners_home %>% 
+  pivot_longer(starts_with("referee"), values_to = "referee") %>% 
+  select(-name)
+
+pred_winner_ref <- logistic_reg() %>% 
+  fit(projected_winner ~ referee, data = predicting_winners_home_2)
+
+tidy(pred_winner_ref) %>% 
+  arrange(p.value)
+# This may be the singular worst data science I've ever done
+# Edwin Young (our leader in calling too many fouls) is the only one
+# who is marginally significant
+
+
+predicting_winners_home_2 <- predicting_winners_home_2 %>% 
+  mutate(of_interest = if_else(referee %in% refs_of_interest, TRUE, FALSE))
+
+pred_winner_ref_2 <- logistic_reg() %>% 
+  fit(projected_winner ~ of_interest, data = predicting_winners_home_2)
+
+tidy(pred_winner_ref_2)
+# Not significant
+
+logistic_reg() %>% 
+  fit(projected_winner ~ referee + foul_diff + foul_diff*referee,
+      data = predicting_winners_home_2) %>% 
+  tidy() %>% 
+  arrange(p.value)
+# We should stop doing this lol
+
+
+linear_reg() %>% 
+  fit(line_error ~ referee, data = predicting_winners_home_2) %>% 
+  tidy() %>% 
+  arrange(p.value)
+
+
+summary(lm(line_error ~ foul_diff, data = predicting_winners_home_2))
+# If teams are called for fewer fouls than their average game in the regular season,
+# We predict that the line error will be negative
+# Which means that if a team is called for fewer fouls than its average game,
+# we actually predict that they underperform
+# This makes no sense
+
 ```
 
 
