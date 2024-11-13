@@ -328,5 +328,17 @@ foul_diff_df %>%
   geom_density(fill = "grey")
 ```
 
+```{r}
+foul_diff_df %>% 
+  left_join(game_info_long, by = "game_id") %>% 
+  select(foul_diff, score_diff, line_error, abs_line_error) %>% 
+  mutate(abs_foul_diff = abs(foul_diff), .after = foul_diff) %>% 
+  na.omit() %>% 
+  cor()
+# No major correlations between foul calls and betting lines
+# Make sure to remove duplicity in foul calls (i.e., may be x3 for every game)
+```
+
+
 
 
