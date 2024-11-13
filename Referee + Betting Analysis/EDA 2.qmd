@@ -10,6 +10,8 @@ format: html
 
 library(tidyverse)
 library(tidytext)
+library(viridis)
+library(ggrepel)
 ```
 
 ```{r}
@@ -126,7 +128,7 @@ tournament_fouls <- pbp_data_long %>%
   summarize(n_fouls = n(),
             n_games = n_distinct(game_id)) %>% 
   ungroup() %>% 
-  mutate(fouls_per_game = n_fouls / n_games)
+  mutate(fouls_per_game_tournament = n_fouls / n_games)
 
 basic_stats %>% 
   group_by(year, school_clean_dict) %>% 
@@ -136,6 +138,41 @@ basic_stats %>%
   mutate(year = factor(year)) %>% 
   right_join(tournament_fouls, by = c("year" = "tournament",
                                       "school_clean_dict" = "team_on")) %>% 
-  filter(is.na(fouls))
+  filter(!is.na(fouls) & school_clean_dict != "Miami") %>% 
+  select(fouls_per_game_season, fouls_per_game_tournament) %>% 
+  cor()
+# That is. Shockingly low.
 
+
+basic_stats %>% 
+  group_by(year, school_clean_dict) %>% 
+  summarize(fouls = pf,
+            fouls_per_game_season = pf / games_played) %>% 
+  ungroup() %>% 
+  mutate(year = factor(year)) %>% 
+  right_join(tournament_fouls, by = c("year" = "tournament",
+                                      "school_clean_dict" = "team_on")) %>% 
+  filter(!is.na(fouls) & school_clean_dict != "Miami") %>% 
+  mutate(school_label = paste0(school_clean_dict, " (", year, ")")) %>% 
+  ggplot(aes(x = fouls_per_game_season, y = fouls_per_game_tournament)) +
+  geom_point(alpha = 0.6, aes(color = year)) +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_abline(intercept = 0, slope = 1, lwd = 1, color = "red") +
+  geom_label_repel(aes(label = if_else(fouls_per_game_season > 19 &
+                                  fouls_per_game_tournament > 25,
+                                school_label,
+                                NA),
+                       fill = year),
+                   min.segment.length = 0) +
+  theme_bw() +
+  labs(x = "Fouls Per Game (Regular Season)",
+       y = "Fouls Per Game (NCAA Tournament)",
+       title = "Fouls Per Game: Tournament vs. Regular Season",
+       color = "Year",
+       fill = "Year") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_color_viridis(discrete = TRUE) +
+  scale_fill_viridis(discrete = TRUE)
+# Are they calling fewer fouls these days?
 ```
