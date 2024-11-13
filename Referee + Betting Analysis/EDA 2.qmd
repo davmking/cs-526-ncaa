@@ -110,6 +110,17 @@ for(i in 2:length(pbp_data)){
 pbp_data_long <- pbp_data_long %>% 
   mutate(tournament = year(date), .after = "game_id") %>% 
   mutate(tournament = factor(tournament))
+
+
+game_info_long <- data.frame(game_info[["game_info_2024"]])
+
+for(i in 2:length(game_info)){
+  game_info_long <- rbind(game_info_long, game_info[[i]])
+}
+
+game_info_long <- game_info_long %>% 
+  mutate(tournament = year(date), .before = "date") %>% 
+  mutate(tournament = factor(tournament))
 ```
 
 
@@ -123,10 +134,15 @@ tournament_fouls <- pbp_data_long %>%
     action_team == "home" ~ home,
     action_team == "away" ~ away,
     TRUE ~ NA
+  ), team_on_seed = case_when(
+    action_team == "home" ~ home_seed,
+    action_team == "away" & away_seed <= 16 ~ away_seed,
+    TRUE ~ NA
   )) %>% 
   group_by(tournament, team_on) %>% 
   summarize(n_fouls = n(),
-            n_games = n_distinct(game_id)) %>% 
+            n_games = n_distinct(game_id),
+            team_on_seed = max(team_on_seed)) %>% 
   ungroup() %>% 
   mutate(fouls_per_game_tournament = n_fouls / n_games)
 
@@ -143,8 +159,7 @@ basic_stats %>%
   cor()
 # That is. Shockingly low.
 
-
-basic_stats %>% 
+fouls_df <- basic_stats %>% 
   group_by(year, school_clean_dict) %>% 
   summarize(fouls = pf,
             fouls_per_game_season = pf / games_played) %>% 
@@ -152,7 +167,10 @@ basic_stats %>%
   mutate(year = factor(year)) %>% 
   right_join(tournament_fouls, by = c("year" = "tournament",
                                       "school_clean_dict" = "team_on")) %>% 
-  filter(!is.na(fouls) & school_clean_dict != "Miami") %>% 
+  filter(!is.na(fouls) & school_clean_dict != "Miami")
+
+
+fouls_df %>% 
   mutate(school_label = paste0(school_clean_dict, " (", year, ")")) %>% 
   ggplot(aes(x = fouls_per_game_season, y = fouls_per_game_tournament)) +
   geom_point(alpha = 0.6, aes(color = year)) +
@@ -175,4 +193,64 @@ basic_stats %>%
   scale_color_viridis(discrete = TRUE) +
   scale_fill_viridis(discrete = TRUE)
 # Are they calling fewer fouls these days?
+
+
+fouls_df %>% 
+  mutate(school_label = paste0(school_clean_dict, " (", year, ")")) %>% 
+  mutate(team_on_seed = factor(team_on_seed)) %>% 
+  ggplot(aes(x = fouls_per_game_season, y = fouls_per_game_tournament)) +
+  geom_point(alpha = 0.6, aes(color = team_on_seed)) +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_abline(intercept = 0, slope = 1, lwd = 1, color = "red") +
+  #geom_label_repel(aes(label = if_else(fouls_per_game_season > 19 &
+  #                                fouls_per_game_tournament > 25,
+  #                              school_label,
+  #                              NA),
+  #                     fill = year),
+  #                 min.segment.length = 0) +
+  theme_bw() +
+  labs(x = "Fouls Per Game (Regular Season)",
+       y = "Fouls Per Game (NCAA Tournament)",
+       title = "Fouls Per Game: Tournament vs. Regular Season",
+       color = "Year",
+       fill = "Year") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_color_viridis(discrete = TRUE) +
+  scale_fill_viridis(discrete = TRUE)
+# No real trend here I don't think
 ```
+
+```{r}
+summary(lm(fouls_df$fouls_per_game_tournament ~ fouls_df$fouls_per_game_season))
+# R2 of 0.276 is honestly pretty shocking to me
+
+summary(lm(fouls_per_game_tournament ~ fouls_per_game_season + team_on_seed +
+             fouls_per_game_season*team_on_seed,
+           data = fouls_df))
+# Intriguingly, seed really does not improve the predictions here
+```
+
+```{r}
+fouls_df %>% 
+  select(year, fouls_per_game_season, fouls_per_game_tournament) %>% 
+  rename(Season = fouls_per_game_season,
+         Tournament = fouls_per_game_tournament) %>% 
+  pivot_longer(-year) %>% 
+  group_by(year, name) %>% 
+  summarize(avg_fouls = mean(value)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = year, y = avg_fouls)) +
+  geom_col() +
+  facet_wrap(~name) +
+  theme_bw() +
+  labs(x = "Season", y = "Average Fouls Per Game",
+       title = "Referees Are Calling Fewer Fouls Over Time") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_x_discrete(breaks = seq(2014, 2024, by = 2)) +
+  coord_cartesian(ylim = c(15, 19))
+# I think we should be allowed to marginally mislead our viewers,
+# as a treat
+```
+
+
