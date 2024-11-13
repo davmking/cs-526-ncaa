@@ -327,6 +327,65 @@ foul_diff_df %>%
   mutate(pct_of_games_reffed = n_occurences / total_games_reffed) %>% 
   ggplot(aes(x = pct_of_games_reffed)) +
   geom_density(fill = "grey")
+
+
+
+
+foul_diff_df %>% 
+  #filter(foul_diff <= sd_2[1] | foul_diff >= sd_2[2]) %>% 
+  select(tournament, team_on, team_on_seed, n_fouls, avg_fouls_season, foul_diff,
+         starts_with("referee")) %>% 
+  pivot_longer(starts_with("referee"), names_to = "ref_id",
+               values_to = "referee") %>% 
+  filter(!is.na(foul_diff)) %>% 
+  group_by(referee) %>% 
+  summarize(#n_occurences = n(),
+            mean_diff = mean(foul_diff),
+            mean_abs_diff = mean(abs(foul_diff))) %>% 
+  ungroup() %>% 
+  left_join(ref_counts, by = "referee") %>% 
+  #mutate(pct_of_games_reffed = n_occurences / (total_games_reffed*2)) %>% 
+  #mutate(skewed_calls = abs(mean_abs_diff - abs(mean_diff))) %>% 
+  filter(total_games_reffed > 2) %>% 
+  arrange(desc(abs(mean_diff))) %>% 
+  print(n = 138)
+# Looking at all of the data, most of the leaders call fewer fouls than expected
+# Karl Hess is on a bender, though
+
+
+refs_of_interest <- foul_diff_df %>% 
+  select(tournament, team_on, team_on_seed, n_fouls, avg_fouls_season, foul_diff,
+         starts_with("referee")) %>% 
+  pivot_longer(starts_with("referee"), names_to = "ref_id",
+               values_to = "referee") %>% 
+  filter(!is.na(foul_diff)) %>% 
+  group_by(referee) %>% 
+  summarize(mean_diff = mean(foul_diff),
+            mean_abs_diff = mean(abs(foul_diff))) %>% 
+  ungroup() %>% 
+  left_join(ref_counts, by = "referee") %>% 
+  filter(total_games_reffed > 2) %>% 
+  arrange(desc(abs(mean_diff))) %>% 
+  head(20) %>% 
+  pull(referee)
+
+foul_diff_df %>% 
+  pivot_longer(starts_with("referee"), values_to = "referee") %>% 
+  filter(referee %in% refs_of_interest) %>% 
+  group_by(referee) %>% 
+  mutate(more_than_normal = if_else(median(foul_diff) > 0, "more", "fewer")) %>% 
+  ungroup() %>% 
+  select(referee, foul_diff, more_than_normal) %>% 
+  ggplot(aes(x = foul_diff, fill = more_than_normal)) +
+  geom_density(alpha = 0.6) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  facet_wrap(~referee) +
+  theme_bw() +
+  labs(x = "Tournament Fouls vs. Regular Season", y = "Percent of Games",
+       fill = "Calls vs. Regular Season") +
+  theme(panel.grid = element_blank(),
+        legend.position = "bottom")
+# Let's try coloring this by number of games refereed, actually
 ```
 
 ```{r}
