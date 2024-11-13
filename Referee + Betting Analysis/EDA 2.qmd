@@ -129,7 +129,6 @@ tournament_fouls <- pbp_data_long %>%
   mutate(fouls_per_game = n_fouls / n_games)
 
 basic_stats %>% 
-  #mutate(school_clean = str_replace(school_clean, "State", "St")) %>% 
   group_by(year, school_clean_dict) %>% 
   summarize(fouls = pf,
             fouls_per_game_season = pf / games_played) %>% 
@@ -139,105 +138,4 @@ basic_stats %>%
                                       "school_clean_dict" = "team_on")) %>% 
   filter(is.na(fouls))
 
-basic_stats %>% 
-  filter(year == 2014) %>% 
-  select(school_clean) %>% 
-  pull()
-
-
-tournament_fouls %>%  
-  group_by(team_on) %>% 
-  summarize() %>% 
-  pull(team_on) %>% 
-  sort()
-
-basic_stats %>% 
-  filter(year >= 2014 & grepl("NCAA", school)) %>% 
-  group_by(school, school_clean) %>% 
-  summarize() %>% 
-  pull(school_clean) %>% 
-  sort()
-
-basic_stats %>% 
-  filter(grepl("SB", school))
 ```
-
-
-```{r}
-basic_stats <- basic_stats %>% 
-  mutate(school_clean_dict = case_when(
-    school_clean == "Abilene Christian" ~ "Abilene Chrstn",
-    school_clean == "Albany (NY)" ~ "UAlbany",
-    school_clean == "Appalachian State" ~ "App State",
-    school_clean == "Arizona State" ~ "Arizona St",
-    school_clean == "Boise State" ~ "Boise St",
-    school_clean == "Brigham Young" ~ "BYU",
-    school_clean == "Cal State Bakersfield" ~ "Bakersfield",
-    school_clean == "Cal State Fullerton" ~ "Fullerton",
-    school_clean == "Cleveland State" ~ "Cleveland St",
-    school_clean == "Coastal Carolina" ~ "Coastal Car",
-    school_clean == "College of Charleston" ~ "Charleston",
-    school_clean == "Colorado State" ~ "Colorado St",
-    school_clean == "Connecticut" ~ "UConn",
-    school_clean == "East Tennessee State" ~ "ETSU",
-    school_clean == "Eastern Kentucky" ~ "E Kentucky",
-    school_clean == "Eastern Washington" ~ "E Washington",
-    school_clean == "FDU" ~ "Fair Dickinson",
-    school_clean == "Florida Atlantic" ~ "FAU",
-    school_clean == "Florida Gulf Coast" ~ "FGCU",
-    school_clean == "Florida State" ~ "Florida St",
-    school_clean == "Fresno State" ~ "Fresno St",
-    school_clean == "George Washington" ~ "G Washington",
-    school_clean == "Georgia State" ~ "Georgia St",
-    school_clean == "Hawaii" ~ "Hawai'i",
-    school_clean == "Jacksonville State" ~ "Jax State",
-    school_clean == "Kansas State" ~ "Kansas St",
-    school_clean == "Kennesaw State" ~ "Kennesaw St",
-    school_clean == "Long Beach State" ~ "Long Beach St",
-    school_clean == "Louisiana State" ~ "LSU",
-    school_clean == "Loyola (IL)" ~ "Loyola Chicago",
-    school_clean == "Maryland-Baltimore County" ~ "UMBC",
-    school_clean == "Massachusetts" ~ "UMass",
-    school_clean == "McNeese State" ~ "McNeese",
-    school_clean == "Miami (FL)" ~ "Miami", # NOTE: May need to exclude
-    school_clean == "Michigan State" ~ "Michigan St",
-    school_clean == "Middle Tennessee" ~ "MTSU",
-    school_clean == "Mississippi" ~ "Ole Miss",
-    school_clean == "Mississippi State" ~ "Mississippi St",
-    school_clean == "Montana State" ~ "Montana St",
-    school_clean == "Morehead State" ~ "Morehead St",
-    school_clean == "Mount St. Mary's" ~ "Mount St Marys",
-    school_clean == "Murray State" ~ "Murray St",
-    school_clean == "New Mexico State" ~ "New Mexico St",
-    school_clean == "Norfolk State" ~ "Norfolk St",
-    school_clean == "North Carolina Central" ~ "NC Central",
-    school_clean == "North Dakota State" ~ "N Dakota St",
-    school_clean == "Northern Kentucky" ~ "N Kentucky",
-    school_clean == "Oklahoma State" ~ "Oklahoma St",
-    school_clean == "Oregon State" ~ "Oregon St",
-    school_clean == "Pennsylvania" ~ "Penn",
-    school_clean == "Pittsburgh" ~ "Pitt",
-    school_clean == "Saint Mary's (CA)" ~ "Saint Mary's",
-    school_clean == "San Diego State" ~ "San Diego St",
-    school_clean == "South Dakota State" ~ "S Dakota St",
-    school_clean == "Southeast Missouri State" ~ "SE Missouri",
-    school_clean == "Southern California" ~ "USC",
-    school_clean == "Southern Methodist" ~ "SMU",
-    school_clean == "St. Bonaventure" ~ "St Bonaventure",
-    school_clean == "St. John's (NY)" ~ "St John's",
-    school_clean == "Stephen F. Austin" ~ "SF Austin",
-    school_clean == "Texas A&M-Corpus Christi" ~ "Texas A&M-CC",
-    school_clean == "Virginia Commonwealth" ~ "VCU",
-    school_clean == "Washington State" ~ "Washington St",
-    school_clean == "Weber State" ~ "Weber St",
-    school_clean == "Western Kentucky" ~ "Western KY",
-    school_clean == "Western Michigan" ~ "W Michigan",
-    school_clean == "Wichita State" ~ "Wichita St",
-    school_clean == "Wright State" ~ "Wright St",
-    TRUE ~ school_clean
-  )) %>% 
-  filter(!(school_clean %in% c("Long Island University",
-                               "New Orleans",
-                               "Wake Forest")))
-```
-
