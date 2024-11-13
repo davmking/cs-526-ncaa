@@ -10,6 +10,7 @@ format: html
 
 library(tidyverse)
 library(tidytext)
+library(tidymodels)
 library(viridis)
 library(ggrepel)
 ```
@@ -338,6 +339,52 @@ foul_diff_df %>%
 # No major correlations between foul calls and betting lines
 # Make sure to remove duplicity in foul calls (i.e., may be x3 for every game)
 ```
+
+
+# Predicted Winners
+
+```{r}
+game_info_winner <- game_info_long %>% 
+  mutate(projected_winner = case_when(
+    home_favored_by >= 0 ~ "home",
+    home_favored_by < 0 ~ "away",
+    TRUE ~ NA
+  ), .after = "away") %>% 
+  filter(!is.na(projected_winner)) %>% 
+  mutate(projected_winner = factor(projected_winner, levels = c("away", "home")))
+
+pbp_proj_winner <- pbp_data_long %>% 
+  filter(play_id == 1) %>% 
+  mutate(projected_winner = case_when(
+    win_prob >= 0.5 ~ "home",
+    win_prob < 0.5 ~ "away",
+    TRUE ~ NA
+  ), .after = "away") %>% 
+  filter(!is.na(projected_winner)) %>% 
+  mutate(projected_winner = factor(projected_winner, levels = c("away", "home")))
+
+
+predicting_winners <- foul_diff_df %>% 
+  left_join(pbp_proj_winner %>% select(game_id, projected_winner, win_prob),
+            by = "game_id") %>% 
+  left_join(game_info_long %>% select(game_id, score_diff,
+                                      line_error, abs_line_error, home),
+            by = "game_id") %>% 
+  mutate(which_team = if_else(home == team_on, "home", "away"),
+         .after = team_on) %>% 
+  select(game_id, tournament, team_on, which_team, team_on_seed, n_fouls,
+         avg_fouls_season, foul_diff, starts_with("referee"), projected_winner,
+         win_prob, score_diff, line_error, abs_line_error)
+
+predicting_winners_home <- predicting_winners %>% 
+  filter(which_team == "home")
+
+pred_winner_foul_diff <- logistic_reg() %>% 
+  fit(projected_winner ~ foul_diff, data = predicting_winners_home)
+
+tidy(pred_winner_foul_diff) # Not significant
+```
+
 
 
 
