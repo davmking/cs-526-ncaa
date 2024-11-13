@@ -386,6 +386,36 @@ foul_diff_df %>%
   theme(panel.grid = element_blank(),
         legend.position = "bottom")
 # Let's try coloring this by number of games refereed, actually
+
+
+foul_diff_df %>% 
+  pivot_longer(starts_with("referee"), values_to = "referee") %>% 
+  filter(referee %in% refs_of_interest) %>% 
+  group_by(referee) %>% 
+  mutate(more_than_normal = if_else(median(foul_diff) > 0, "more", "fewer")) %>% 
+  ungroup() %>% 
+  select(referee, foul_diff, more_than_normal) %>% 
+  group_by(referee) %>% 
+  mutate(n_games = n() / 2,
+         med_diff = median(foul_diff)) %>% 
+  ungroup() %>% 
+  mutate(name_label = paste0(referee, " (", round(med_diff, 2), ")")) %>% 
+  ggplot(aes(x = foul_diff, fill = n_games)) +
+  geom_density(alpha = 0.6) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  facet_wrap(~reorder(name_label, med_diff)) +
+  theme_bw() +
+  labs(x = "Tournament Fouls vs. Regular Season", y = "Percent of Games",
+       fill = "Number of Games Officiated",
+       title = "Officials Whose Games Frequently Vary From Regular-Season Expectations",
+       caption = "Numbers represent median deviation from regular-season fouls") +
+  theme(panel.grid.minor = element_blank(),
+        legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5)) +
+  scale_fill_viridis(direction = -1) +
+  scale_y_continuous(labels = scales::percent_format(), breaks = seq(0, .2, .1)) +
+  scale_x_continuous(breaks = seq(-10, 10, by = 10))
+# Let's try coloring this by number of
 ```
 
 ```{r}
