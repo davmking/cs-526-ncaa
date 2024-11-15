@@ -96,7 +96,8 @@ basic_stats <- read.csv("FeatureElimination/Basic_Stats.csv") %>%
   ), .after = school_clean) %>% 
   filter(!(school_clean %in% c("Long Island University",
                                "New Orleans",
-                               "Wake Forest")))
+                               "Wake Forest"))) %>% 
+  mutate(year = factor(year))
 # Basic stats missing UCSB for some reason
 
 load("data/game_info.RData")
@@ -560,6 +561,78 @@ fouls_df %>%
   theme(plot.title = element_text(hjust = 0.5),
         legend.position = "bottom") +
   scale_fill_viridis(direction = -1, breaks = seq(16, 19))
+```
+
+# Little bit of success prediction
+
+```{r}
+
+tournament_winners <- game_info_long %>% 
+  group_by(tournament) %>% 
+  slice_max(date) %>% 
+  ungroup() %>% 
+  mutate(winner = if_else(score_diff > 0, home, away)) %>% 
+  select(tournament, winner)
+
+# For the sake of argument, let's filter out the first four games
+tournament_wins <- game_info_long %>% 
+  pivot_longer(c("home", "away"), names_to = "which_team",
+               values_to = "school") %>% 
+  filter(arena_location != "Dayton, OH" & date != "2021-03-18") %>% 
+  group_by(tournament, school) %>% 
+  summarize(n_games = n()) %>% 
+  ungroup() %>% 
+  left_join(tournament_winners, by = "tournament") %>% 
+  mutate(won_natty = if_else(school == winner, TRUE, FALSE)) %>% 
+  select(-winner) %>% 
+  mutate(total_wins = n_games + won_natty - 1) %>% 
+  mutate(tournament_round = case_when(
+    total_wins == 0 ~ "R64",
+    total_wins == 1 ~ "R32",
+    total_wins == 2 ~ "S16",
+    total_wins == 3 ~ "E8",
+    total_wins == 4 ~ "F4",
+    total_wins == 5 ~ "Runner-Up",
+    total_wins == 6 ~ "Champion",
+    TRUE ~ NA
+  )) %>% 
+  mutate(tournament_round = factor(tournament_round, levels = c("R64", "R32",
+                                                                "S16", "E8",
+                                                                "F4",
+                                                                "Runner-Up",
+                                                                "Champion")))
+  #group_by(tournament) %>% 
+  #summarize(total_wins = sum(total_wins)) # Yields correct number of games
+
+
+# ID the first four games
+game_info_long %>% 
+  filter(arena_location == "Dayton, OH" | date == "2021-03-18") %>% 
+  group_by(tournament) %>% 
+  summarize(n = n())
+
+# ID first four games in 2021
+game_info_long %>% 
+  filter(tournament == 2021) %>% 
+  arrange(date) %>% 
+  glimpse()
+```
+
+
+```{r}
+tournament_preds <- tournament_wins %>% 
+  left_join(basic_stats, by = c("tournament" = "year",
+                                "school" = "school_clean_dict"))
+
+# Significant, but not that meaningful
+linear_reg() %>% 
+  fit(total_wins ~ simple_rating_system, data = tournament_preds) %>% 
+  tidy()
+
+# Significant and perhaps more meaningful
+linear_reg() %>% 
+  fit(total_wins ~ strength_of_schedule, data = tournament_preds) %>% 
+  tidy()
 ```
 
 

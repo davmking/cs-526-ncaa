@@ -1,0 +1,179 @@
+---
+title: "AP Poll Data"
+format: html
+---
+
+
+```{r}
+library(tidyverse)
+library(janitor)
+```
+
+
+```{r}
+ap_2024 <- read.csv("data/ap_poll_2024.csv", na.strings = "",
+                    skip = 2)
+
+colnames(ap_2024)[4:(ncol(ap_2024) - 1)] <- paste0("week_",
+                                                   seq(length(4:(ncol(ap_2024))),
+                                                       from = 2))
+
+ap_2024 <- ap_2024 %>% 
+  mutate(year = 2024, .before = everything()) %>% 
+  janitor::clean_names() %>% 
+  rename("final" = post)
+```
+
+```{r}
+ap_2023 <- read.csv("data/ap_poll_2023.csv", na.strings = "",
+                    skip = 2)
+
+colnames(ap_2023)[4:(ncol(ap_2023) - 1)] <- paste0("week_",
+                                                   seq(length(4:(ncol(ap_2023))),
+                                                       from = 2))
+
+ap_2023 <- ap_2023 %>% 
+  mutate(year = 2023, .before = everything()) %>% 
+  janitor::clean_names() %>% 
+  mutate(week_19 = NA,
+         week_20 = NA,
+         .before = "final")
+```
+
+```{r}
+ap_2022 <- read.csv("data/ap_poll_2022.csv", na.strings = "",
+                    skip = 2)
+
+colnames(ap_2022)[4:(ncol(ap_2022) - 1)] <- paste0("week_",
+                                                   seq(length(4:(ncol(ap_2022))),
+                                                       from = 2))
+
+ap_2022 <- ap_2022 %>% 
+  mutate(year = 2022, .before = everything()) %>% 
+  janitor::clean_names() %>% 
+  mutate(week_19 = NA,
+         week_20 = NA,
+        .before = "final")
+```
+
+```{r}
+ap_2021 <- read.csv("data/ap_poll_2021.csv", na.strings = "",
+                    skip = 2)
+
+colnames(ap_2021)[4:(ncol(ap_2021) - 1)] <- paste0("week_",
+                                                   seq(length(4:(ncol(ap_2021))),
+                                                       from = 2))
+
+ap_2021 <- ap_2021 %>% 
+  mutate(year = 2021, .before = everything()) %>% 
+  janitor::clean_names() %>% 
+  mutate(week_17 = NA,
+         week_18 = NA,
+         week_19 = NA,
+         week_20 = NA,
+         .before = "final")
+```
+
+```{r}
+ap_2019 <- read.csv("data/ap_poll_2019.csv", na.strings = "",
+                    skip = 2)
+
+colnames(ap_2019)[4:(ncol(ap_2019) - 1)] <- paste0("week_",
+                                                   seq(length(4:(ncol(ap_2019))),
+                                                       from = 2))
+
+ap_2019 <- ap_2019 %>% 
+  mutate(year = 2019, .before = everything()) %>% 
+  janitor::clean_names() %>% 
+  mutate(week_20 = NA,
+         .before = "final")
+```
+
+```{r}
+ap_2018 <- read.csv("data/ap_poll_2018.csv", na.strings = "",
+                    skip = 2)
+
+colnames(ap_2018)[4:(ncol(ap_2018) - 1)] <- paste0("week_",
+                                                   seq(length(4:(ncol(ap_2018))),
+                                                       from = 2))
+
+ap_2018 <- ap_2018 %>% 
+  mutate(year = 2018, .before = everything()) %>% 
+  janitor::clean_names() %>% 
+  mutate(week_19 = NA,
+         week_20 = NA,
+         .before = "final")
+```
+
+```{r}
+ap_2017 <- read.csv("data/ap_poll_2017.csv", na.strings = "",
+                    skip = 2)
+
+colnames(ap_2017)[4:(ncol(ap_2017) - 1)] <- paste0("week_",
+                                                   seq(length(4:(ncol(ap_2017))),
+                                                       from = 2))
+
+ap_2017 <- ap_2017 %>% 
+  mutate(year = 2017, .before = everything()) %>% 
+  janitor::clean_names() %>% 
+  mutate(week_19 = NA,
+         week_20 = NA,
+         .before = "final")
+```
+
+```{r}
+ap_2016 <- read.csv("data/ap_poll_2016.csv", na.strings = "",
+                    skip = 2)
+
+colnames(ap_2016)[4:(ncol(ap_2016) - 1)] <- paste0("week_",
+                                                   seq(length(4:(ncol(ap_2016))),
+                                                       from = 2))
+
+ap_2016 <- ap_2016 %>% 
+  mutate(year = 2016, .before = everything()) %>% 
+  janitor::clean_names() %>% 
+  mutate(week_19 = NA,
+         week_20 = NA,
+         .before = "final")
+```
+
+```{r}
+ap_2015 <- read.csv("data/ap_poll_2015.csv", na.strings = "",
+                    skip = 2)
+
+colnames(ap_2015)[4:(ncol(ap_2015) - 1)] <- paste0("week_",
+                                                   seq(length(4:(ncol(ap_2015))),
+                                                       from = 2))
+
+ap_2015 <- ap_2015 %>% 
+  mutate(year = 2015, .before = everything()) %>% 
+  janitor::clean_names() %>% 
+  mutate(week_19 = NA,
+         week_20 = NA,
+         .before = "final")
+```
+
+```{r}
+ap_2014 <- read.csv("data/ap_poll_2014.csv", na.strings = "",
+                    skip = 2)
+
+colnames(ap_2014)[4:(ncol(ap_2014) - 1)] <- paste0("week_",
+                                                   seq(length(4:(ncol(ap_2014))),
+                                                       from = 2))
+
+ap_2014 <- ap_2014 %>% 
+  mutate(year = 2019, .before = everything()) %>% 
+  janitor::clean_names() %>% 
+  mutate(week_20 = NA,
+         .before = "final")
+```
+
+```{r}
+ap_polls <- rbind(ap_2014, ap_2015, ap_2016, ap_2017, ap_2018,
+                  ap_2019, ap_2021, ap_2022, ap_2023, ap_2024)
+```
+
+
+
+
+
