@@ -397,18 +397,19 @@ foul_diff_df %>%
   select(referee, foul_diff, more_than_normal) %>% 
   group_by(referee) %>% 
   mutate(n_games = n() / 2,
-         med_diff = median(foul_diff)) %>% 
+         med_diff = median(foul_diff),
+         mean_diff = mean(foul_diff)) %>% 
   ungroup() %>% 
-  mutate(name_label = paste0(referee, " (", round(med_diff, 2), ")")) %>% 
+  mutate(name_label = paste0(referee, " (", round(mean_diff, 2), ")")) %>% 
   ggplot(aes(x = foul_diff, fill = n_games)) +
   geom_density(alpha = 0.6) +
   geom_vline(xintercept = 0, linetype = "dashed") +
-  facet_wrap(~reorder(name_label, med_diff)) +
+  facet_wrap(~reorder(name_label, mean_diff)) +
   theme_bw() +
   labs(x = "Tournament Fouls vs. Regular Season", y = "Percent of Games",
        fill = "Number of Games Officiated",
        title = "Officials Whose Games Frequently Vary From Regular-Season Expectations",
-       caption = "Numbers represent median deviation from regular-season fouls") +
+       caption = "Numbers represent mean deviation from regular-season fouls") +
   theme(panel.grid.minor = element_blank(),
         legend.position = "bottom",
         plot.title = element_text(hjust = 0.5)) +
@@ -520,6 +521,46 @@ summary(lm(line_error ~ foul_diff, data = predicting_winners_home_2))
 
 ```
 
+
+## Edwin Young
+
+```{r}
+game_info_long %>% 
+  pivot_longer(starts_with("referee"), values_to = "referee") %>% 
+  filter(grepl("Edwin  Young", referee)) %>% 
+  left_join(foul_diff_df, by = "game_id") %>% 
+  select(team_on, home, away, home_score, away_score, home_favored_by, total_line,
+         over_under, line_error, abs_line_error, n_fouls, avg_fouls_season,
+        foul_diff) %>% 
+  glimpse()
+
+
+```
+
+
+## Fewer fouls in tournament compared to regular season?
+
+```{r}
+fouls_df %>% 
+  mutate(foul_diff = fouls_per_game_tournament - fouls_per_game_season) %>% 
+  group_by(year) %>% 
+  summarize(Mean = mean(foul_diff),
+            Median = median(foul_diff),
+            #n_games = n(),
+            mean_fouls_tournament = mean(n_fouls / n_games)) %>% 
+  ungroup() %>% 
+  pivot_longer(c(Mean, Median), names_to = "stat", values_to = "diff") %>% 
+  ggplot(aes(x = year, y = diff, fill = mean_fouls_tournament)) +
+  geom_col() +
+  facet_wrap(~stat) +
+  theme_bw() +
+  labs(x = "Tournament", y = "Surplus Fouls in Tournament",
+       title = "Referees Call Slightly More Fouls in NCAAT, On Average",
+       fill = "Average Fouls per Team per Game") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_fill_viridis(direction = -1, breaks = seq(16, 19))
+```
 
 
 
