@@ -214,7 +214,8 @@ ap_polls <- ap_polls %>%
     school == "Wichita State" ~ "Wichita St",
     TRUE ~ school
   ), .after = "school") %>% 
-  filter(!(school %in% c("Indiana State", "South Florida")))
+  filter(!(school %in% c("Indiana State", "South Florida"))) %>% 
+  mutate(year = factor(year))
 
 ap_polls %>% 
   group_by(school_dict) %>% 
@@ -422,7 +423,8 @@ coaches_polls <- coaches_polls %>%
     TRUE ~ school
   ), .after = "school") %>% 
   filter(!(school %in% c("Indiana State", "South Florida",
-                         "Wake Forest")))
+                         "Wake Forest"))) %>% 
+  mutate(year = factor(year))
 
 coaches_polls %>% 
   group_by(school_dict) %>% 

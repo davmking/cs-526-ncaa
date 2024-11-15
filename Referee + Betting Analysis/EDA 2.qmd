@@ -633,6 +633,17 @@ linear_reg() %>%
 linear_reg() %>% 
   fit(total_wins ~ strength_of_schedule, data = tournament_preds) %>% 
   tidy()
+
+
+
+tournament_wins %>% 
+  left_join(basic_stats, by = c("tournament" = "year",
+                                "school" = "school_clean_dict")) %>% 
+  left_join(ap_polls, by = c("tournament" = "year",
+                             "school" = "school_dict"))
+
+
+ap_polls
 ```
 
 
