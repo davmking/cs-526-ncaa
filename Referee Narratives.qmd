@@ -1,0 +1,309 @@
+---
+title: "Referee Narratives"
+format: pdf
+---
+
+# Libraries and Data
+
+```{r}
+#| label: libraries
+
+library(tidyverse)
+library(tidytext)
+library(tidymodels)
+library(viridis)
+library(ggrepel)
+```
+
+```{r}
+#| label: load data
+
+basic_stats <- read.csv("FeatureElimination/Basic_Stats.csv") %>% 
+  janitor::clean_names() %>%
+  mutate(school_clean = if_else(
+    str_detect(school, "NCAA"),
+    substring(school, 1, nchar(school) - 5),
+    school
+  ), .after = school) %>% 
+    mutate(school_clean_dict = case_when(
+    school_clean == "Abilene Christian" ~ "Abilene Chrstn",
+    school_clean == "Albany (NY)" ~ "UAlbany",
+    school_clean == "Appalachian State" ~ "App State",
+    school_clean == "Arizona State" ~ "Arizona St",
+    school_clean == "Boise State" ~ "Boise St",
+    school_clean == "Brigham Young" ~ "BYU",
+    school_clean == "Cal State Bakersfield" ~ "Bakersfield",
+    school_clean == "Cal State Fullerton" ~ "Fullerton",
+    school_clean == "Cleveland State" ~ "Cleveland St",
+    school_clean == "Coastal Carolina" ~ "Coastal Car",
+    school_clean == "College of Charleston" ~ "Charleston",
+    school_clean == "Colorado State" ~ "Colorado St",
+    school_clean == "Connecticut" ~ "UConn",
+    school_clean == "East Tennessee State" ~ "ETSU",
+    school_clean == "Eastern Kentucky" ~ "E Kentucky",
+    school_clean == "Eastern Washington" ~ "E Washington",
+    school_clean == "FDU" ~ "Fair Dickinson",
+    school_clean == "Florida Atlantic" ~ "FAU",
+    school_clean == "Florida Gulf Coast" ~ "FGCU",
+    school_clean == "Florida State" ~ "Florida St",
+    school_clean == "Fresno State" ~ "Fresno St",
+    school_clean == "George Washington" ~ "G Washington",
+    school_clean == "Georgia State" ~ "Georgia St",
+    school_clean == "Hawaii" ~ "Hawai'i",
+    school_clean == "Jacksonville State" ~ "Jax State",
+    school_clean == "Kansas State" ~ "Kansas St",
+    school_clean == "Kennesaw State" ~ "Kennesaw St",
+    school_clean == "Long Beach State" ~ "Long Beach St",
+    school_clean == "Louisiana State" ~ "LSU",
+    school_clean == "Loyola (IL)" ~ "Loyola Chicago",
+    school_clean == "Maryland-Baltimore County" ~ "UMBC",
+    school_clean == "Massachusetts" ~ "UMass",
+    school_clean == "McNeese State" ~ "McNeese",
+    school_clean == "Miami (FL)" ~ "Miami", # NOTE: May need to exclude
+    school_clean == "Michigan State" ~ "Michigan St",
+    school_clean == "Middle Tennessee" ~ "MTSU",
+    school_clean == "Mississippi" ~ "Ole Miss",
+    school_clean == "Mississippi State" ~ "Mississippi St",
+    school_clean == "Montana State" ~ "Montana St",
+    school_clean == "Morehead State" ~ "Morehead St",
+    school_clean == "Mount St. Mary's" ~ "Mount St Marys",
+    school_clean == "Murray State" ~ "Murray St",
+    school_clean == "New Mexico State" ~ "New Mexico St",
+    school_clean == "Norfolk State" ~ "Norfolk St",
+    school_clean == "North Carolina Central" ~ "NC Central",
+    school_clean == "North Dakota State" ~ "N Dakota St",
+    school_clean == "Northern Kentucky" ~ "N Kentucky",
+    school_clean == "Oklahoma State" ~ "Oklahoma St",
+    school_clean == "Oregon State" ~ "Oregon St",
+    school_clean == "Pennsylvania" ~ "Penn",
+    school_clean == "Pittsburgh" ~ "Pitt",
+    school_clean == "Saint Mary's (CA)" ~ "Saint Mary's",
+    school_clean == "San Diego State" ~ "San Diego St",
+    school_clean == "South Dakota State" ~ "S Dakota St",
+    school_clean == "Southeast Missouri State" ~ "SE Missouri",
+    school_clean == "Southern California" ~ "USC",
+    school_clean == "Southern Methodist" ~ "SMU",
+    school_clean == "St. Bonaventure" ~ "St Bonaventure",
+    school_clean == "St. John's (NY)" ~ "St John's",
+    school_clean == "Stephen F. Austin" ~ "SF Austin",
+    school_clean == "Texas A&M-Corpus Christi" ~ "Texas A&M-CC",
+    school_clean == "Virginia Commonwealth" ~ "VCU",
+    school_clean == "Washington State" ~ "Washington St",
+    school_clean == "Weber State" ~ "Weber St",
+    school_clean == "Western Kentucky" ~ "Western KY",
+    school_clean == "Western Michigan" ~ "W Michigan",
+    school_clean == "Wichita State" ~ "Wichita St",
+    school_clean == "Wright State" ~ "Wright St",
+    TRUE ~ school_clean
+  ), .after = school_clean) %>% 
+  filter(!(school_clean %in% c("Long Island University",
+                               "New Orleans",
+                               "Wake Forest")))
+# Basic stats missing UCSB for some reason
+
+load("data/game_info.RData")
+load("data/pbp_data.RData")
+
+pbp_data_long <- data.frame(pbp_data[["pbp_2024"]])
+
+for(i in 2:length(pbp_data)){
+  pbp_data_long <- rbind(pbp_data_long, pbp_data[[i]])
+}
+
+pbp_data_long <- pbp_data_long %>% 
+  mutate(tournament = year(date), .after = "game_id") %>% 
+  mutate(tournament = factor(tournament))
+
+
+game_info_long <- data.frame(game_info[["game_info_2024"]])
+
+for(i in 2:length(game_info)){
+  game_info_long <- rbind(game_info_long, game_info[[i]])
+}
+
+game_info_long <- game_info_long %>% 
+  mutate(tournament = year(date), .before = "date") %>% 
+  mutate(tournament = factor(tournament))
+
+tournament_fouls <- pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("foul on", description)) %>% 
+  mutate(team_on = case_when(
+    action_team == "home" ~ home,
+    action_team == "away" ~ away,
+    TRUE ~ NA
+  ), team_on_seed = case_when(
+    action_team == "home" ~ home_seed,
+    action_team == "away" & away_seed <= 16 ~ away_seed,
+    TRUE ~ NA
+  )) %>% 
+  group_by(tournament, team_on) %>% 
+  summarize(n_fouls = n(),
+            n_games = n_distinct(game_id),
+            team_on_seed = max(team_on_seed)) %>% 
+  ungroup() %>% 
+  mutate(fouls_per_game_tournament = n_fouls / n_games)
+
+
+fouls_df <- basic_stats %>% 
+  group_by(year, school_clean_dict) %>% 
+  summarize(fouls = pf,
+            fouls_per_game_season = pf / games_played) %>% 
+  ungroup() %>% 
+  mutate(year = factor(year)) %>% 
+  right_join(tournament_fouls, by = c("year" = "tournament",
+                                      "school_clean_dict" = "team_on")) %>% 
+  filter(!is.na(fouls) & school_clean_dict != "Miami")
+
+
+foul_diff_df <- pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("foul on", description)) %>% 
+  mutate(team_on = case_when(
+    action_team == "home" ~ home,
+    action_team == "away" ~ away,
+    TRUE ~ NA
+  ), team_on_seed = case_when(
+    action_team == "home" ~ home_seed,
+    action_team == "away" & away_seed <= 16 ~ away_seed,
+    TRUE ~ NA
+  )) %>% 
+  group_by(game_id, tournament, team_on, team_on_seed) %>% 
+  summarize(n_fouls = n()) %>% 
+  ungroup() %>% 
+  left_join(basic_stats %>% mutate(year = factor(year)),
+            by = c("tournament" = "year", 
+                                "team_on" = "school_clean_dict")) %>% 
+  mutate(avg_fouls_season = pf / games_played,
+         foul_diff = n_fouls - avg_fouls_season) %>% 
+  left_join(game_info_long %>% select(game_id, starts_with("referee")),
+            by = "game_id")
+
+ref_counts <- game_info_long %>% 
+  select(starts_with("referee")) %>% 
+  pivot_longer(everything(), values_to = "referee") %>% 
+  group_by(referee) %>% 
+  summarize(total_games_reffed = n()) %>% 
+  ungroup()
+
+refs_of_interest <- foul_diff_df %>% 
+  select(tournament, team_on, team_on_seed, n_fouls, avg_fouls_season, foul_diff,
+         starts_with("referee")) %>% 
+  pivot_longer(starts_with("referee"), names_to = "ref_id",
+               values_to = "referee") %>% 
+  filter(!is.na(foul_diff)) %>% 
+  group_by(referee) %>% 
+  summarize(mean_diff = mean(foul_diff),
+            mean_abs_diff = mean(abs(foul_diff))) %>% 
+  ungroup() %>% 
+  left_join(ref_counts, by = "referee") %>% 
+  filter(total_games_reffed > 2) %>% 
+  arrange(desc(abs(mean_diff))) %>% 
+  head(20) %>% 
+  pull(referee)
+```
+
+
+# Betting Lines
+
+```{r}
+#| label: betting line plot
+
+game_info_long %>% 
+  filter(!is.na(line_error)) %>% 
+  ggplot(aes(x = line_error)) +
+  geom_density(fill = "grey") +
+  geom_vline(xintercept = median(game_info_long$line_error,
+                                 na.rm = TRUE),
+             linetype = "dashed") +
+  theme_bw() +
+  labs(x = "Home Team Performance vs. Betting Line",
+       y = "Density",
+       title = "Betting Lines Overestimate Higher Seeds",
+       subtitle = "Negative Values = Underperformance") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+# Negative score = we overestimated the team
+# Negative score = home team underperformed expectations by x
+```
+
+Higher seeds are always the home team in the NCAA tournament. They are typically favored to win games. In this plot, we can see that betting lines are generally rather good, but more of the mass is on the negative side than the positive side, indicating that higher seeds are more likely than not to underperform the lines by which they are favored. This makes sense, empirically - NCAA tournament games tend to be closer than anticipated.
+
+However, this is actually a very small margin - you won't make much money betting on this, since the median line error is -0.5 points.
+
+
+```{r}
+#| label: betting line plot by year
+
+line_medians <- game_info_long %>% 
+  group_by(tournament) %>% 
+  summarize(med_line_error = median(line_error, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  na.omit()
+
+game_info_long %>% 
+  filter(!is.na(line_error)) %>% 
+  ggplot(aes(x = line_error)) +
+  geom_density(fill = "grey") +
+  geom_vline(data = line_medians, aes(xintercept = med_line_error),
+             linetype = "dashed") +
+  facet_wrap(~tournament, nrow = 2) +
+  theme_bw() +
+  labs(x = "Home Team Performance vs. Betting Line",
+       y = "Density",
+       title = "Betting Lines Overestimate Higher Seeds",
+       subtitle = "Negative Values = Underperformance") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+
+game_info_long %>% 
+  filter(!is.na(line_error)) %>% 
+  group_by(tournament) %>% 
+  summarize(n = n(),
+            avg_error = mean(line_error),
+            sd_error = sd(line_error),
+            med_error = median(line_error)) %>% 
+  knitr::kable(digits = 2,
+               col.names = c("Tournament", "Number of Games",
+                             "Mean Line Error", "Line Error SD",
+                             "Median Line Error"))
+```
+
+The betting lines have not varied in performance much over time, though they have spread out from massive modes at 0 in earlier years. We can see, in a very minor trend in the table, that in recent years betting lines have moved from overestimating higher seeds to underestimating them.
+
+```{r}
+
+over_under_meds <- game_info_long %>% 
+  filter(!is.na(over_under)) %>% 
+  mutate(overtime_game = if_else(overtime_game == TRUE,
+                                 "Overtime", "No Overtime")) %>% 
+  group_by(overtime_game) %>% 
+  summarize(med_ou = median(over_under)) %>% 
+  ungroup()
+
+game_info_long %>% 
+  filter(!is.na(over_under)) %>% 
+  mutate(overtime_game = if_else(overtime_game == TRUE,
+                                 "Overtime", "No Overtime")) %>% 
+  group_by(overtime_game) %>% 
+  mutate(number_of_games = n()) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = over_under, fill = factor(number_of_games))) +
+  geom_density(alpha = 0.6) +
+  geom_vline(data = over_under_meds, aes(xintercept = med_ou),
+             linetype = "dashed") +
+  facet_wrap(~overtime_game, scales = "free_y", ncol = 1) +
+  theme_bw() +
+  labs(x = "Total Score vs. Over/Under", y = "Density",
+       title = "Bettors Overestimate Total Points, Except For Overtime Games",
+       fill = "Number of Games") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_fill_viridis(discrete = TRUE)
+```
+
+In general, bettors set the over/under for games a little bit higher than is achieved empirically - with the exception of overtime games, which tend to go well over. However, overtime games are exceedingly rare, and not worth anticipating.
+
+
+
