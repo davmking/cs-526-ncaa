@@ -8,6 +8,7 @@ format: html
 ```{r}
 #| label: libraries
 
+library(MASS)
 library(tidyverse)
 library(tidytext)
 library(tidymodels)
@@ -97,7 +98,13 @@ basic_stats <- read.csv("FeatureElimination/Basic_Stats.csv") %>%
   filter(!(school_clean %in% c("Long Island University",
                                "New Orleans",
                                "Wake Forest"))) %>% 
-  mutate(year = factor(year))
+  mutate(year = factor(year)) %>% 
+  mutate(conf_w_l = conf_wins / (conf_wins + conf_losses),
+         .after = "conf_losses") %>% 
+  mutate(home_w_l = home_wins / (home_wins + home_losses),
+         .after = "home_losses") %>% 
+  mutate(away_w_l = away_wins / (away_wins + away_losses),
+         .after = "away_losses")
 # Basic stats missing UCSB for some reason
 
 load("data/game_info.RData")
@@ -636,14 +643,47 @@ linear_reg() %>%
 
 
 
-tournament_wins %>% 
+tournament_preds <- tournament_wins %>% 
   left_join(basic_stats, by = c("tournament" = "year",
                                 "school" = "school_clean_dict")) %>% 
   left_join(ap_polls, by = c("tournament" = "year",
-                             "school" = "school_dict"))
+                             "school" = "school_dict")) %>% 
+  left_join(coaches_polls, by = c("tournament" = "year",
+                                  "school" = "school_dict"),
+            suffix = c("_ap", "_coaches"))
 
 
-ap_polls
+polls_model <- linear_reg() %>% 
+  fit(total_wins ~ w_l + simple_rating_system + strength_of_schedule +
+        conf_w_l + home_w_l + away_w_l + pre_ap + week_8_ap + 
+        pre_coaches + week_8_coaches, data = tournament_preds)
+
+tidy(polls_model)
+
+polls_model$fit$df.residual # Not too many left
+
+
+polls_model_logistic <- multinom_reg() %>% 
+  fit(tournament_round ~ w_l + simple_rating_system + strength_of_schedule +
+        conf_w_l + home_w_l + away_w_l + pre_ap + week_8_ap + 
+        pre_coaches + week_8_coaches, data = tournament_preds)
+
+tidy(polls_model_logistic) %>% 
+  arrange(p.value) %>% 
+  print(n = 66)
+
+
+
+polls_model_propodds <- polr(tournament_round ~ w_l + simple_rating_system +
+                               strength_of_schedule +
+        conf_w_l + home_w_l + away_w_l + pre_ap + week_8_ap + 
+        pre_coaches + week_8_coaches, data = tournament_preds,
+        method = "logistic", Hess = TRUE)
+
+summary(polls_model_propodds)
+
+
+brant::brant(polls_model_propodds)
 ```
 
 
