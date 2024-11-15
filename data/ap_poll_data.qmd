@@ -162,7 +162,7 @@ colnames(ap_2014)[4:(ncol(ap_2014) - 1)] <- paste0("week_",
                                                        from = 2))
 
 ap_2014 <- ap_2014 %>% 
-  mutate(year = 2019, .before = everything()) %>% 
+  mutate(year = 2014, .before = everything()) %>% 
   janitor::clean_names() %>% 
   mutate(week_20 = NA,
          .before = "final")
