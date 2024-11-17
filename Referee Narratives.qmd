@@ -13,6 +13,7 @@ library(tidytext)
 library(tidymodels)
 library(viridis)
 library(ggrepel)
+library(randomForest)
 ```
 
 ```{r}
@@ -410,4 +411,7 @@ game_info_long %>%
 In general, bettors set the over/under for games a little bit higher than is achieved empirically - with the exception of overtime games, which tend to go well over. However, overtime games are exceedingly rare, and not worth anticipating.
 
 
+# Poll Data
+
+The question: Do the analytics predict everything? Can the experts tell us things that the analytics maybe can't?
 

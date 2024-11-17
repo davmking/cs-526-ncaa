@@ -862,6 +862,45 @@ varImpPlot(wins_rf_coaches)
 ```
 
 
+## Give me everything tonight
+
+```{r}
+tournament_preds_fct_all <- tournament_preds_fct %>% 
+  select(total_wins, tournament_round, starts_with("week_"),
+                pre_ap, final_ap,
+                pre_coaches, final_coaches,
+                pre_tournament_ap, pre_tournament_coaches,
+         simple_rating_system, strength_of_schedule,
+         w_l, conf_w_l, home_w_l, away_w_l) %>% 
+  select(-starts_with(c("week_17", "week_18", "week_19", "week_20"))) %>% 
+  select(-starts_with("final")) %>% 
+  na.omit()
+
+
+set.seed(526)
+rf_all_wins <- randomForest(total_wins ~ .-tournament_round,
+                            data = tournament_preds_fct_all,
+                            importance = TRUE)
+
+varImpPlot(rf_all_wins)
+# Easily goes simple rating system -> win/loss -> SOS for both
+# MSE favors the other w/l records as well
+# Purity favors the known best-performing polls
+
+
+set.seed(526)
+rf_all_round <- randomForest(tournament_round ~ .-total_wins,
+                             data = tournament_preds_fct_all,
+                             importance = TRUE)
+
+varImpPlot(rf_all_round)
+# Same jaunt, but SOS matters more than win/loss
+# Accuracy: favors known best-performing polls
+# Gini: favors the win/loss metrics
+# I think this is kind of the opposite of how it behaved in the continuous model?
+```
+
+
 
 
 
