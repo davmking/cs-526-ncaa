@@ -9,6 +9,7 @@ format: html
 #| label: libraries
 
 library(MASS)
+library(randomForest)
 library(tidyverse)
 library(tidytext)
 library(tidymodels)
@@ -685,6 +686,182 @@ summary(polls_model_propodds)
 
 brant::brant(polls_model_propodds)
 ```
+
+
+```{r}
+tournament_preds_fct <- tournament_preds %>% 
+  mutate(across(c(starts_with("week_"), pre_ap, final_ap,
+                  pre_coaches, final_coaches), ~ case_when(
+    . < 5 ~ "1-5",
+    . < 10 ~ "6-10",
+    . < 15 ~ "11-15",
+    . < 20 ~ "16-20",
+    . < 25 ~ "21-25",
+    is.na(.) ~ "Unranked",
+    TRUE ~ NA
+  ))) %>% 
+  mutate(across(c(starts_with("week_"), pre_ap, final_ap,
+                  pre_coaches, final_coaches), ~ factor(., levels = c("1-5", "6-10",
+                                                             "11-15", "16-20",
+                                                             "21-25", "Unranked",
+                                                             NA))))
+
+tournament_preds_fct %>% 
+  dplyr::select(tournament, starts_with("week_"), pre_ap, final_ap,
+                  pre_coaches, final_coaches,
+                #pre_tournament_ap, pre_tournament_coaches
+                ) %>% 
+  mutate(across(c(starts_with("week_"), pre_ap, final_ap,
+                  pre_coaches, final_coaches,
+                  #pre_tournament_ap, pre_tournament_coaches
+                  ),
+                ~ if_else(. %in% c("1-5", "6-10", "11-15", "16-20", "21-25"),
+                          TRUE, FALSE))) %>% 
+  group_by(tournament) %>% 
+  summarize(across(ends_with("ap") | ends_with("coaches"), ~sum(. == TRUE))) %>% 
+  ungroup() %>% 
+  glimpse()
+
+
+tournament_preds_fct <- tournament_preds_fct %>% 
+  mutate(pre_tournament_ap = case_when(
+    tournament == 2021 ~ week_16_ap,
+    tournament %in% c(2015, 2016, 2017, 2018, 2022, 2023) ~ week_18_ap,
+    tournament %in% c(2014, 2019) ~ week_19_ap,
+    tournament == 2024 ~ week_20_ap,
+    TRUE ~ NA
+  ), .before = "final_ap") %>% 
+  mutate(pre_tournament_coaches = case_when(
+    tournament == 2021 ~ week_16_coaches,
+    tournament %in% c(2018, 2022) ~ week_18_coaches,
+    tournament %in% c(2015, 2016, 2017, 2019, 2023) ~ week_19_coaches,
+    tournament %in% c(2014, 2024) ~ week_20_coaches,
+    TRUE ~ NA
+  ), .before = "final_coaches") %>% 
+  glimpse()
+
+
+
+tournament_preds_fct_reduced <- tournament_preds_fct %>% 
+  dplyr::select(total_wins, tournament_round, starts_with("week_"),
+                pre_ap, final_ap,
+                pre_coaches, final_coaches,
+                pre_tournament_ap, pre_tournament_coaches) %>% 
+  dplyr::select(-starts_with(c("week_17", "week_18", "week_19", "week_20"))) %>% 
+  na.omit()
+
+
+
+# All weeks, including final
+
+set.seed(526)
+wins_rf <- randomForest(total_wins ~ .-tournament_round,
+                        data = tournament_preds_fct_reduced,
+                  importance = TRUE)
+
+varImpPlot(wins_rf)
+# Far and away final coaches, as well as final AP
+# For %IncMSE, it's actually week 3 for both - improves beyond pre-tournament poll
+# For IncNodePurity, it's the pre-tournament polls, as well as week 3-4 coaches and week 4 ap
+
+
+
+# All weeks excluding final
+tournament_preds_fct_reduced_2 <- tournament_preds_fct_reduced %>% 
+  dplyr::select(-starts_with("final"))
+
+set.seed(526)
+wins_rf2 <- randomForest(total_wins ~ .-tournament_round,
+                        data = tournament_preds_fct_reduced_2,
+                  importance = TRUE)
+
+varImpPlot(wins_rf2)
+# For MSE, week 3-4 AP, preseason coaches & pre-tournament ap
+# For purity, week 3 & 16 coaches, pre-tournament ap, and both for week 4
+
+
+# Just AP
+
+tpfr_ap <- tournament_preds_fct_reduced_2 %>% 
+  dplyr::select(!ends_with("coaches"))
+
+set.seed(526)
+wins_rf_ap <- randomForest(total_wins ~ .-tournament_round,
+                        data = tpfr_ap,
+                  importance = TRUE)
+
+varImpPlot(wins_rf_ap)
+# For both: week 4 is biggest, preseason and pre-tournament both top 4
+# For MSE: week 3
+# For purity: week 16
+
+
+# Just Coaches
+tpfr_coaches <- tournament_preds_fct_reduced_2 %>% 
+  dplyr::select(!ends_with("ap"))
+
+set.seed(526)
+wins_rf_coaches <- randomForest(total_wins ~ .-tournament_round,
+                        data = tpfr_coaches,
+                  importance = TRUE)
+
+varImpPlot(wins_rf_coaches)
+# For both: weeek 4 and week 3
+# For MSE: preseason and week 11
+# For purity: pre-tournament and week 16
+```
+
+
+```{r}
+# All weeks, including final
+set.seed(526)
+wins_rf <- randomForest(tournament_round ~ .-total_wins,
+                        data = tournament_preds_fct_reduced,
+                  importance = TRUE)
+
+varImpPlot(wins_rf)
+# Far and away final coaches, as well as final AP
+# For accuracy, week 3 ap and preseason coaches
+# For gini, week 16 coaches and pre-tournament AP
+
+
+
+# All weeks excluding final
+set.seed(526)
+wins_rf2 <- randomForest(tournament_round ~ .-total_wins,
+                        data = tournament_preds_fct_reduced_2,
+                  importance = TRUE)
+
+varImpPlot(wins_rf2)
+# For accuracy, pre-season polls, as well as week 3-4 ap and week 16 (both)
+# For gini, week 16, pre-tournament, and week 4 (all for both)
+
+
+# Just AP
+set.seed(526)
+wins_rf_ap <- randomForest(tournament_round ~ .-total_wins,
+                        data = tpfr_ap,
+                  importance = TRUE)
+
+varImpPlot(wins_rf_ap)
+# For both: week 3, 4, 16
+# For accuracy: preseason
+# For gini: week 16
+
+
+# Just Coaches
+set.seed(526)
+wins_rf_coaches <- randomForest(tournament_round ~ .-total_wins,
+                        data = tpfr_coaches,
+                  importance = TRUE)
+
+varImpPlot(wins_rf_coaches)
+# For both: week 16
+# For accuracy: preseason, week 3-4
+# For gini: week 13, 15, pre-tournament
+```
+
+
 
 
 
