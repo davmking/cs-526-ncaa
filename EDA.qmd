@@ -9,568 +9,46 @@ format: html
 library(tidyverse)
 library(ncaahoopR)
 library(viridis)
+library(tidytext)
+library(ggridges)
 ```
 
-# Get Tournaments
-
-## 2024
+# Data Setup
 
 ```{r}
-dates_2024 <- c("2024-03-19", "2024-03-20",
-                "2024-03-21", "2024-03-22", "2024-03-23", "2024-03-24",
-                "2024-03-28", "2024-03-29", "2024-03-30", "2024-03-31",
-                "2024-04-06", "2024-04-08")
+load("data/game_info.RData")
+load("data/pbp_data.RData")
+```
 
-games_2024 <- get_master_schedule(dates_2024[1])
+## Game Info
 
-for(i in 2:length(dates_2024)){
-  games_2024 <- rbind(games_2024, get_master_schedule(dates_2024[i]))
+```{r}
+game_info_long <- data.frame(game_info[["game_info_2024"]])
+
+for(i in 2:length(game_info)){
+  game_info_long <- rbind(game_info_long, game_info[[i]])
 }
 
-games_2024 <- games_2024 %>% 
-  filter(!grepl("NIT", away) &
-         !grepl("CBI", away) &
-         !grepl("CIT", away))
-
-pbp_2024 <- get_pbp_game(games_2024$game_id)
+game_info_long <- game_info_long %>% 
+  mutate(tournament = year(date), .before = "date") %>% 
+  mutate(tournament = factor(tournament))
 ```
 
-## 2023
+## PBP Data
 
 ```{r}
-dates_2023 <- c("2023-03-14", "2023-03-15",
-                "2023-03-16", "2023-03-17", "2023-03-18", "2023-03-19",
-                "2023-03-23", "2023-03-24", "2023-03-25", "2023-03-26",
-                "2023-04-01", "2023-04-03")
+pbp_data_long <- data.frame(pbp_data[["pbp_2024"]])
 
-games_2023 <- get_master_schedule(dates_2023[1])
-
-for(i in 2:length(dates_2023)){
-  games_2023 <- rbind(games_2023, get_master_schedule(dates_2023[i]))
+for(i in 2:length(pbp_data)){
+  pbp_data_long <- rbind(pbp_data_long, pbp_data[[i]])
 }
 
-games_2023 <- games_2023 %>% 
-  filter(!grepl("NIT", away) &
-         !grepl("CBI", away) &
-         !grepl("CIT", away))
-
-pbp_2023 <- get_pbp_game(games_2023$game_id)
-```
-
-## 2022
-
-```{r}
-dates_2022 <- c("2022-03-15", "2022-03-16",
-                "2022-03-17", "2022-03-18", "2022-03-19", "2022-03-20",
-                "2022-03-24", "2022-03-25", "2022-03-26", "2022-03-27",
-                "2022-04-02", "2022-04-04")
-
-games_2022 <- get_master_schedule(dates_2022[1])
-
-for(i in 2:length(dates_2022)){
-  games_2022 <- rbind(games_2022, get_master_schedule(dates_2022[i]))
-}
-
-games_2022 <- games_2022 %>% 
-  filter(!grepl("NIT", away) &
-         !grepl("CBI", away) &
-         !grepl("CIT", away) &
-         !grepl("Classic", away))
-
-pbp_2022 <- get_pbp_game(games_2022$game_id)
-```
-
-## 2021
-
-```{r}
-dates_2021 <- c("2021-03-18",
-                "2021-03-19", "2021-03-20", "2021-03-21", "2021-03-22",
-                "2021-03-27", "2021-03-28", "2021-03-29", "2021-03-30",
-                "2021-04-03", "2021-04-05")
-
-games_2021 <- get_master_schedule(dates_2021[1])
-
-for(i in 2:length(dates_2021)){
-  games_2021 <- rbind(games_2021, get_master_schedule(dates_2021[i]))
-}
-
-games_2021 <- games_2021 %>% 
-  filter(!grepl("NIT", away) &
-         !grepl("CBI", away) &
-         !grepl("CIT", away))
-
-pbp_2021 <- get_pbp_game(games_2021$game_id)
-```
-
-## 2019
-
-```{r}
-dates_2019 <- c("2019-03-19", "2019-03-20",
-                "2019-03-21", "2019-03-22", "2019-03-23", "2019-03-24",
-                "2019-03-28", "2019-03-29", "2019-03-30", "2019-03-31",
-                "2019-04-06", "2019-04-08")
-
-games_2019 <- get_master_schedule(dates_2019[1])
-
-for(i in 2:length(dates_2019)){
-  games_2019 <- rbind(games_2019, get_master_schedule(dates_2019[i]))
-}
-
-games_2019 <- games_2019 %>% 
-  filter(!grepl("NIT", away) &
-         !grepl("CBI", away) &
-         !grepl("CIT", away))
-
-pbp_2019 <- get_pbp_game(games_2019$game_id)
-```
-
-## 2018
-
-```{r}
-dates_2018 <- c("2018-03-13", "2018-03-14",
-                "2018-03-15", "2018-03-16", "2018-03-17", "2018-03-18",
-                "2018-03-22", "2018-03-23", "2018-03-24", "2018-03-25",
-                "2018-03-31", "2018-04-02")
-
-games_2018 <- get_master_schedule(dates_2018[1])
-
-for(i in 2:length(dates_2018)){
-  games_2018 <- rbind(games_2018, get_master_schedule(dates_2018[i]))
-}
-
-games_2018 <- games_2018 %>% 
-  filter(!grepl("NIT", away) &
-         !grepl("CBI", away) &
-         !grepl("CIT", away))
-
-pbp_2018 <- get_pbp_game(games_2018$game_id)
-```
-
-## 2017
-
-```{r}
-dates_2017 <- c("2017-03-14", "2017-03-15",
-                "2017-03-16", "2017-03-17", "2017-03-18", "2017-03-19",
-                "2017-03-23", "2017-03-24", "2017-03-25", "2017-03-26",
-                "2017-04-01", "2017-04-03")
-
-games_2017 <- get_master_schedule(dates_2017[1])
-
-for(i in 2:length(dates_2017)){
-  games_2017 <- rbind(games_2017, get_master_schedule(dates_2017[i]))
-}
-
-games_2017 <- games_2017 %>% 
-  filter(grepl("MEN'S", away))
-
-pbp_2017 <- get_pbp_game(games_2017$game_id)
-```
-
-Two of the first four games (from 2017-03-14) are not present, for unclear reasons.
-
-## 2016
-
-```{r}
-dates_2016 <- c("2016-03-15", "2016-03-16",
-                "2016-03-17", "2016-03-18", "2016-03-19", "2016-03-20",
-                "2016-03-24", "2016-03-25", "2016-03-26", "2016-03-27",
-                "2016-04-02", "2016-04-04")
-
-games_2016 <- get_master_schedule(dates_2016[1])
-
-for(i in 2:length(dates_2016)){
-  games_2016 <- rbind(games_2016, get_master_schedule(dates_2016[i]))
-}
-
-games_2016 <- games_2016 %>% 
-  filter(grepl("MEN'S", away))
-
-pbp_2016 <- get_pbp_game(games_2016$game_id)
-```
-
-## 2015
-
-```{r}
-dates_2015 <- c("2015-03-17", "2015-03-18",
-                "2015-03-19", "2015-03-20", "2015-03-21", "2015-03-22",
-                "2015-03-26", "2015-03-27", "2015-03-28", "2015-03-29",
-                "2015-04-04", "2015-04-06")
-
-games_2015 <- get_master_schedule(dates_2015[1])
-
-for(i in 2:length(dates_2015)){
-  games_2015 <- rbind(games_2015, get_master_schedule(dates_2015[i]))
-}
-
-games_2015 <- games_2015 %>% 
-  filter(grepl("MEN'S", away))
-
-pbp_2015 <- get_pbp_game(games_2015$game_id)
-```
-
-## 2014
-
-```{r}
-dates_2014 <- c("2014-03-18", "2014-03-19",
-                "2014-03-20", "2014-03-21", "2014-03-22", "2014-03-23",
-                "2014-03-27", "2014-03-28", "2014-03-29", "2014-03-30",
-                "2014-04-05", "2014-04-07")
-
-games_2014 <- get_master_schedule(dates_2014[1])
-
-for(i in 2:length(dates_2014)){
-  games_2014 <- rbind(games_2014, get_master_schedule(dates_2014[i]))
-}
-
-games_2014 <- games_2014 %>% 
-  filter(grepl("MEN'S", away))
-
-pbp_2014 <- get_pbp_game(games_2014$game_id)
+pbp_data_long <- pbp_data_long %>% 
+  mutate(tournament = year(date), .after = "game_id") %>% 
+  mutate(tournament = factor(tournament))
 ```
 
 
-# Data Wrangling
-
-## 2024
-
-```{r}
-pbp_2024 <- games_2024 %>% 
-  select(game_id, away_rank, home_rank) %>% 
-  rename(away_seed = away_rank, home_seed = home_rank) %>% 
-  right_join(pbp_2024, by = "game_id")
-
-pbp_2024 <- pbp_2024 %>% 
-  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
-
-pbp_2024 %>% 
-  filter(referee_1 == "") %>% 
-  select(game_id) %>% 
-  distinct()
-# Only one game missing referees
-
-pbp_2024 <- pbp_2024 %>% 
-  mutate(referee_1 = if_else(referee_1 == "", NA, referee_1))
-
-game_info_2024 <- pbp_2024 %>% 
-  group_by(game_id) %>% 
-  slice_max(play_id) %>% 
-  ungroup() %>% 
-  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
-  select(game_id, date, home, away, home_seed, away_seed, home_score,
-         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
-         home_favored_by, total_line, referee_1, referee_2, referee_3,
-         arena_location, arena, capacity, attendance, overtime_game) %>% 
-  mutate(total_scored = home_score + away_score,
-         over_under = total_scored - total_line,
-         line_error = score_diff - home_favored_by,
-         abs_line_error = abs(line_error),
-         pct_attendance = attendance / capacity)
-```
-
-## 2023
-
-```{r}
-pbp_2023 <- games_2023 %>% 
-  select(game_id, away_rank, home_rank) %>% 
-  rename(away_seed = away_rank, home_seed = home_rank) %>% 
-  right_join(pbp_2023, by = "game_id")
-
-pbp_2023 <- pbp_2023 %>% 
-  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
-
-pbp_2023 %>% 
-  filter(referee_1 == "") %>% 
-  select(game_id) %>% 
-  distinct()
-# Zero games missing referees
-
-game_info_2023 <- pbp_2023 %>% 
-  group_by(game_id) %>% 
-  slice_max(play_id) %>% 
-  ungroup() %>% 
-  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
-  select(game_id, date, home, away, home_seed, away_seed, home_score,
-         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
-         home_favored_by, total_line, referee_1, referee_2, referee_3,
-         arena_location, arena, capacity, attendance, overtime_game) %>% 
-  mutate(total_scored = home_score + away_score,
-         over_under = total_scored - total_line,
-         line_error = score_diff - home_favored_by,
-         abs_line_error = abs(line_error),
-         pct_attendance = attendance / capacity)
-```
-
-## 2022
-
-```{r}
-pbp_2022 <- games_2022 %>% 
-  select(game_id, away_rank, home_rank) %>% 
-  rename(away_seed = away_rank, home_seed = home_rank) %>% 
-  right_join(pbp_2022, by = "game_id")
-
-pbp_2022 <- pbp_2022 %>% 
-  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
-
-pbp_2022 %>% 
-  filter(referee_1 == "") %>% 
-  select(game_id) %>% 
-  distinct()
-# Zero games missing referees
-
-game_info_2022 <- pbp_2022 %>% 
-  group_by(game_id) %>% 
-  slice_max(play_id) %>% 
-  ungroup() %>% 
-  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
-  select(game_id, date, home, away, home_seed, away_seed, home_score,
-         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
-         home_favored_by, total_line, referee_1, referee_2, referee_3,
-         arena_location, arena, capacity, attendance, overtime_game) %>% 
-  mutate(total_scored = home_score + away_score,
-         over_under = total_scored - total_line,
-         line_error = score_diff - home_favored_by,
-         abs_line_error = abs(line_error),
-         pct_attendance = attendance / capacity)
-```
-
-## 2021
-
-```{r}
-pbp_2021 <- games_2021 %>% 
-  select(game_id, away_rank, home_rank) %>% 
-  rename(away_seed = away_rank, home_seed = home_rank) %>% 
-  right_join(pbp_2021, by = "game_id")
-
-pbp_2021 <- pbp_2021 %>% 
-  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
-
-pbp_2021 %>% 
-  filter(referee_1 == "") %>% 
-  select(game_id) %>% 
-  distinct()
-# Zero games missing referees
-
-game_info_2021 <- pbp_2021 %>% 
-  group_by(game_id) %>% 
-  slice_max(play_id) %>% 
-  ungroup() %>% 
-  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
-  select(game_id, date, home, away, home_seed, away_seed, home_score,
-         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
-         home_favored_by, total_line, referee_1, referee_2, referee_3,
-         arena_location, arena, capacity, attendance, overtime_game) %>% 
-  mutate(total_scored = home_score + away_score,
-         over_under = total_scored - total_line,
-         line_error = score_diff - home_favored_by,
-         abs_line_error = abs(line_error),
-         pct_attendance = attendance / capacity)
-```
-
-Note: Due to COVID-19 protocols, one game was canceled.
-
-## 2019
-
-```{r}
-pbp_2019 <- games_2019 %>% 
-  select(game_id, away_rank, home_rank) %>% 
-  rename(away_seed = away_rank, home_seed = home_rank) %>% 
-  right_join(pbp_2019, by = "game_id")
-
-pbp_2019 <- pbp_2019 %>% 
-  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
-
-pbp_2019 %>% 
-  filter(referee_1 == "") %>% 
-  select(game_id) %>% 
-  distinct()
-# One game missing referees
-
-pbp_2019 <- pbp_2019 %>% 
-  mutate(referee_1 = if_else(referee_1 == "", NA, referee_1))
-
-game_info_2019 <- pbp_2019 %>% 
-  group_by(game_id) %>% 
-  slice_max(play_id) %>% 
-  ungroup() %>% 
-  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
-  select(game_id, date, home, away, home_seed, away_seed, home_score,
-         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
-         home_favored_by, total_line, referee_1, referee_2, referee_3,
-         arena_location, arena, capacity, attendance, overtime_game) %>% 
-  mutate(total_scored = home_score + away_score,
-         over_under = total_scored - total_line,
-         line_error = score_diff - home_favored_by,
-         abs_line_error = abs(line_error),
-         pct_attendance = attendance / capacity)
-```
-
-## 2018
-
-```{r}
-pbp_2018 <- games_2018 %>% 
-  select(game_id, away_rank, home_rank) %>% 
-  rename(away_seed = away_rank, home_seed = home_rank) %>% 
-  right_join(pbp_2018, by = "game_id")
-
-pbp_2018 <- pbp_2018 %>% 
-  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
-
-pbp_2018 %>% 
-  filter(referee_1 == "") %>% 
-  select(game_id) %>% 
-  distinct()
-# Zero games missing referees
-
-game_info_2018 <- pbp_2018 %>% 
-  group_by(game_id) %>% 
-  slice_max(play_id) %>% 
-  ungroup() %>% 
-  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
-  select(game_id, date, home, away, home_seed, away_seed, home_score,
-         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
-         home_favored_by, total_line, referee_1, referee_2, referee_3,
-         arena_location, arena, capacity, attendance, overtime_game) %>% 
-  mutate(total_scored = home_score + away_score,
-         over_under = total_scored - total_line,
-         line_error = score_diff - home_favored_by,
-         abs_line_error = abs(line_error),
-         pct_attendance = attendance / capacity)
-```
-
-## 2017
-
-```{r}
-pbp_2017 <- games_2017 %>% 
-  select(game_id, away_rank, home_rank) %>% 
-  rename(away_seed = away_rank, home_seed = home_rank) %>% 
-  right_join(pbp_2017, by = "game_id")
-
-pbp_2017 <- pbp_2017 %>% 
-  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
-
-pbp_2017 %>% 
-  filter(referee_1 == "") %>% 
-  select(game_id) %>% 
-  distinct()
-# Zero games missing referees
-
-game_info_2017 <- pbp_2017 %>% 
-  group_by(game_id) %>% 
-  slice_max(play_id) %>% 
-  ungroup() %>% 
-  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
-  select(game_id, date, home, away, home_seed, away_seed, home_score,
-         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
-         home_favored_by, total_line, referee_1, referee_2, referee_3,
-         arena_location, arena, capacity, attendance, overtime_game) %>% 
-  mutate(total_scored = home_score + away_score,
-         over_under = total_scored - total_line,
-         line_error = score_diff - home_favored_by,
-         abs_line_error = abs(line_error),
-         pct_attendance = attendance / capacity)
-```
-
-## 2016
-
-```{r}
-pbp_2016 <- games_2016 %>% 
-  select(game_id, away_rank, home_rank) %>% 
-  rename(away_seed = away_rank, home_seed = home_rank) %>% 
-  right_join(pbp_2016, by = "game_id")
-
-pbp_2016 <- pbp_2016 %>% 
-  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
-
-pbp_2016 %>% 
-  filter(referee_1 == "") %>% 
-  select(game_id) %>% 
-  distinct()
-# Zero games missing referees
-
-game_info_2016 <- pbp_2016 %>% 
-  group_by(game_id) %>% 
-  slice_max(play_id) %>% 
-  ungroup() %>% 
-  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
-  select(game_id, date, home, away, home_seed, away_seed, home_score,
-         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
-         home_favored_by, total_line, referee_1, referee_2, referee_3,
-         arena_location, arena, capacity, attendance, overtime_game) %>% 
-  mutate(total_scored = home_score + away_score,
-         over_under = total_scored - total_line,
-         line_error = score_diff - home_favored_by,
-         abs_line_error = abs(line_error),
-         pct_attendance = attendance / capacity)
-```
-
-## 2015
-
-```{r}
-pbp_2015 <- games_2015 %>% 
-  select(game_id, away_rank, home_rank) %>% 
-  rename(away_seed = away_rank, home_seed = home_rank) %>% 
-  right_join(pbp_2015, by = "game_id")
-
-pbp_2015 <- pbp_2015 %>% 
-  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
-
-pbp_2015 %>% 
-  filter(referee_1 == "") %>% 
-  select(game_id) %>% 
-  distinct()
-# One game missing referees
-
-pbp_2015 <- pbp_2015 %>% 
-  mutate(referee_1 = if_else(referee_1 == "", NA, referee_1))
-
-game_info_2015 <- pbp_2015 %>% 
-  group_by(game_id) %>% 
-  slice_max(play_id) %>% 
-  ungroup() %>% 
-  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
-  select(game_id, date, home, away, home_seed, away_seed, home_score,
-         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
-         home_favored_by, total_line, referee_1, referee_2, referee_3,
-         arena_location, arena, capacity, attendance, overtime_game) %>% 
-  mutate(total_scored = home_score + away_score,
-         over_under = total_scored - total_line,
-         line_error = score_diff - home_favored_by,
-         abs_line_error = abs(line_error),
-         pct_attendance = attendance / capacity)
-```
-
-## 2014
-
-```{r}
-pbp_2014 <- games_2014 %>% 
-  select(game_id, away_rank, home_rank) %>% 
-  rename(away_seed = away_rank, home_seed = home_rank) %>% 
-  right_join(pbp_2014, by = "game_id")
-
-pbp_2014 <- pbp_2014 %>% 
-  separate(referees, into = c("referee_1", "referee_2", "referee_3"), sep = "/")
-
-pbp_2014 %>% 
-  filter(referee_1 == "") %>% 
-  select(game_id) %>% 
-  distinct()
-# Zero games missing referees
-
-game_info_2014 <- pbp_2014 %>% 
-  group_by(game_id) %>% 
-  slice_max(play_id) %>% 
-  ungroup() %>% 
-  mutate(overtime_game = if_else(half > 2, T, F)) %>% 
-  select(game_id, date, home, away, home_seed, away_seed, home_score,
-         away_score, score_diff, home_time_out_remaining, away_time_out_remaining,
-         home_favored_by, total_line, referee_1, referee_2, referee_3,
-         arena_location, arena, capacity, attendance, overtime_game) %>% 
-  mutate(total_scored = home_score + away_score,
-         over_under = total_scored - total_line,
-         line_error = score_diff - home_favored_by,
-         abs_line_error = abs(line_error),
-         pct_attendance = attendance / capacity)
-```
 
 
 # Exploration
@@ -588,6 +66,8 @@ pbp_2024 %>%
 ## Referees
 
 ```{r}
+#| eval: false
+
 game_info_2024 %>% 
   select(starts_with("referee")) %>% 
   pivot_longer(everything(), names_to = "order", values_to = "ref") %>% 
@@ -654,4 +134,183 @@ game_info_2024 %>%
 ```
 
 Note: This is really a trend that needs to be sorted over more years.
+
+```{r}
+game_info_long %>% 
+  select(starts_with("referee")) %>% 
+  pivot_longer(everything(), names_to = "order", values_to = "ref") %>% 
+  group_by(ref) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  head(20) %>% 
+  ggplot(aes(x = n, y = reorder(ref, n))) +
+  geom_col()
+
+game_info_long %>% 
+  filter(overtime_game == F) %>% 
+  select(starts_with("referee"), over_under) %>% 
+  pivot_longer(-over_under, names_to = "order", values_to = "ref") %>% 
+  group_by(ref) %>% 
+  na.omit() %>% 
+  summarize(ou_error = mean(over_under, na.rm = TRUE),
+            n_appearances = n()) %>% 
+  ungroup() %>% 
+  filter(n_appearances > 2) %>% 
+  na.omit() %>% 
+  #filter(n_appearances >= 10) %>% 
+  ggplot(aes(x = ou_error, y = reorder(ref, ou_error),
+             fill = factor(n_appearances))) +
+  geom_col() +
+  labs(x = "Total Score minus Total Line",
+       y = "Referee",
+       fill = "Number of Games Officiated",
+       title = "Average Over/Under Error by Referee") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_fill_viridis(discrete = T, option = "B")
+# The findings are much less remarkable when we handle this correctly lol
+
+
+game_info_long %>% 
+  filter(overtime_game == F) %>%
+  select(starts_with("referee"), line_error, abs_line_error) %>% 
+  pivot_longer(starts_with("referee"), names_to = "order", values_to = "ref") %>% 
+  pivot_longer(ends_with("line_error"), names_to = "type", values_to = "error") %>% 
+  group_by(ref, type) %>% 
+  na.omit() %>% 
+  summarize(avg_error = mean(error, na.rm = T),
+            n_appearances = n()) %>% 
+  ungroup() %>% 
+  filter(n_appearances >= 5) %>% 
+  mutate(type = case_when(
+    type == "abs_line_error" ~ "Absolute",
+    type == "line_error" ~ "Relative",
+    T ~ NA
+  )) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = avg_error, y = reorder(ref, avg_error),
+             fill = n_appearances)) +
+  geom_col() +
+  facet_wrap(~type, scales = "free_x") +
+  labs(x = "Line Error",
+       y = "Referee",
+       fill = "Number of Games Officiated",
+       title = "Average Line Error by Referee") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_fill_viridis(discrete = F, option = "B")
+# Generally not too insane? But maybe sometimes they are
+# Some of these are pretty impressive, though
+```
+
+### Who calls the most fouls?
+
+```{r}
+pbp_data_long %>% 
+  select(description) %>% 
+  unnest_tokens(word, description) %>% 
+  group_by(word) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  filter(n > 1000) %>% 
+  print(n = 79)
+# Foul is the 10th most common word, with 22,731 occurrences
+
+pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("foul on", description)) %>% 
+  semi_join((game_info_long %>% 
+               filter(overtime_game == FALSE)), by = "game_id") %>% 
+  select(starts_with("referee"), game_id) %>% 
+  pivot_longer(-game_id, names_to = "order", values_to = "ref") %>% 
+  group_by(ref) %>% 
+  summarize(n = n(), n_games = n_distinct(game_id)) %>% 
+  ungroup() %>% 
+  mutate(fouls_per_game = n / n_games) %>% 
+  arrange(desc(fouls_per_game)) %>% 
+  na.omit() %>% 
+  filter(n_games >= 10) %>% 
+  slice(c(1:10, (n() - 9):n())) %>%
+  mutate(level = if_else(fouls_per_game > 32, "Highest", "Lowest")) %>% 
+  ggplot(aes(x = fouls_per_game, y = reorder(ref, fouls_per_game),
+             fill = n_games)) +
+  geom_col() +
+  facet_wrap(~level, scales = "free_y") +
+  theme_bw() +
+  labs(x = "Fouls Per Game", y = "Referee",
+       title = "Referees Calling Games with the Most Fouls") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none") +
+  scale_fill_viridis(option = "B")
+# No huge discrepancies, but there's definitely some variance
+# TV Teddy actually doesn't call nearly as many fouls as I would expect
+
+pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("foul on", description)) %>% 
+  semi_join((game_info_long %>% 
+               filter(overtime_game == FALSE)), by = "game_id") %>% 
+  select(starts_with("referee"), game_id, action_team) %>% 
+  na.omit() %>% 
+  pivot_longer(starts_with("referee"), names_to = "order", values_to = "ref") %>% 
+  group_by(ref, action_team) %>% 
+  summarize(n = n(), n_games = n_distinct(game_id)) %>% 
+  ungroup() %>% 
+  mutate(fouls_per_game = n / n_games) %>% 
+  pivot_wider(names_from = action_team, 
+              values_from = c(n, fouls_per_game)) %>% 
+  mutate(home_advantage_raw = n_home - n_away,
+         home_advantage_pg = fouls_per_game_home - fouls_per_game_away,
+         discrepancy_raw = abs(home_advantage_raw),
+         discrepancy_pg = abs(home_advantage_pg)) %>% 
+  filter(n_games >= 10) %>% 
+  arrange(desc(discrepancy_pg)) %>% 
+  slice(c(1:10, (n() - 9):n())) %>% 
+  mutate(level = if_else(discrepancy_pg > 2, "Highest", "Lowest")) %>% 
+  ggplot(aes(x = -home_advantage_pg, y = reorder(ref, discrepancy_pg),
+             fill = if_else(home_advantage_pg < 0, T, F))) +
+  geom_col() +
+  facet_wrap(~level, scales = "free") +
+  theme_bw() +
+  labs(x = "Home Team Fouls Advantage Per Game", y = "Referee",
+       title = "Home Team Foul Advantage", fill = "Favors Home Team") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_fill_viridis(discrete = T, direction = -1)
+# Definitely some home cooking, but that's to be expected
+# Higher seed = better team = less likely to commit fouls
+```
+
+
+### Check Betting Lines
+
+Just to make sure - do betting lines significantly differ by tournament?
+
+```{r}
+game_info_long %>% 
+  select(tournament, total_line) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = total_line, fill = tournament)) +
+  geom_density(alpha = 0.5)
+# Over under lines def higher in 2024 than 2023
+
+game_info_long %>% 
+  select(tournament, home_favored_by) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = home_favored_by, y = tournament, fill = tournament)) +
+  geom_density_ridges(alpha = 0.5) +
+  theme_bw() +
+  labs(x = "Home Team Favored By", y = "Year",
+       title = "Have Point Spreads Changed over Time?") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none")
+# Not much change over time tbh
+```
+
+
+
 

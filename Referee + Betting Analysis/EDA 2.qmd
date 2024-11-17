@@ -1,0 +1,907 @@
+---
+title: "EDA 2"
+format: html
+---
+
+# Libraries and Data
+
+```{r}
+#| label: libraries
+
+library(MASS)
+library(randomForest)
+library(tidyverse)
+library(tidytext)
+library(tidymodels)
+library(viridis)
+library(ggrepel)
+```
+
+```{r}
+basic_stats <- read.csv("FeatureElimination/Basic_Stats.csv") %>% 
+  janitor::clean_names() %>%
+  mutate(school_clean = if_else(
+    str_detect(school, "NCAA"),
+    substring(school, 1, nchar(school) - 5),
+    school
+  ), .after = school) %>% 
+    mutate(school_clean_dict = case_when(
+    school_clean == "Abilene Christian" ~ "Abilene Chrstn",
+    school_clean == "Albany (NY)" ~ "UAlbany",
+    school_clean == "Appalachian State" ~ "App State",
+    school_clean == "Arizona State" ~ "Arizona St",
+    school_clean == "Boise State" ~ "Boise St",
+    school_clean == "Brigham Young" ~ "BYU",
+    school_clean == "Cal State Bakersfield" ~ "Bakersfield",
+    school_clean == "Cal State Fullerton" ~ "Fullerton",
+    school_clean == "Cleveland State" ~ "Cleveland St",
+    school_clean == "Coastal Carolina" ~ "Coastal Car",
+    school_clean == "College of Charleston" ~ "Charleston",
+    school_clean == "Colorado State" ~ "Colorado St",
+    school_clean == "Connecticut" ~ "UConn",
+    school_clean == "East Tennessee State" ~ "ETSU",
+    school_clean == "Eastern Kentucky" ~ "E Kentucky",
+    school_clean == "Eastern Washington" ~ "E Washington",
+    school_clean == "FDU" ~ "Fair Dickinson",
+    school_clean == "Florida Atlantic" ~ "FAU",
+    school_clean == "Florida Gulf Coast" ~ "FGCU",
+    school_clean == "Florida State" ~ "Florida St",
+    school_clean == "Fresno State" ~ "Fresno St",
+    school_clean == "George Washington" ~ "G Washington",
+    school_clean == "Georgia State" ~ "Georgia St",
+    school_clean == "Hawaii" ~ "Hawai'i",
+    school_clean == "Jacksonville State" ~ "Jax State",
+    school_clean == "Kansas State" ~ "Kansas St",
+    school_clean == "Kennesaw State" ~ "Kennesaw St",
+    school_clean == "Long Beach State" ~ "Long Beach St",
+    school_clean == "Louisiana State" ~ "LSU",
+    school_clean == "Loyola (IL)" ~ "Loyola Chicago",
+    school_clean == "Maryland-Baltimore County" ~ "UMBC",
+    school_clean == "Massachusetts" ~ "UMass",
+    school_clean == "McNeese State" ~ "McNeese",
+    school_clean == "Miami (FL)" ~ "Miami", # NOTE: May need to exclude
+    school_clean == "Michigan State" ~ "Michigan St",
+    school_clean == "Middle Tennessee" ~ "MTSU",
+    school_clean == "Mississippi" ~ "Ole Miss",
+    school_clean == "Mississippi State" ~ "Mississippi St",
+    school_clean == "Montana State" ~ "Montana St",
+    school_clean == "Morehead State" ~ "Morehead St",
+    school_clean == "Mount St. Mary's" ~ "Mount St Marys",
+    school_clean == "Murray State" ~ "Murray St",
+    school_clean == "New Mexico State" ~ "New Mexico St",
+    school_clean == "Norfolk State" ~ "Norfolk St",
+    school_clean == "North Carolina Central" ~ "NC Central",
+    school_clean == "North Dakota State" ~ "N Dakota St",
+    school_clean == "Northern Kentucky" ~ "N Kentucky",
+    school_clean == "Oklahoma State" ~ "Oklahoma St",
+    school_clean == "Oregon State" ~ "Oregon St",
+    school_clean == "Pennsylvania" ~ "Penn",
+    school_clean == "Pittsburgh" ~ "Pitt",
+    school_clean == "Saint Mary's (CA)" ~ "Saint Mary's",
+    school_clean == "San Diego State" ~ "San Diego St",
+    school_clean == "South Dakota State" ~ "S Dakota St",
+    school_clean == "Southeast Missouri State" ~ "SE Missouri",
+    school_clean == "Southern California" ~ "USC",
+    school_clean == "Southern Methodist" ~ "SMU",
+    school_clean == "St. Bonaventure" ~ "St Bonaventure",
+    school_clean == "St. John's (NY)" ~ "St John's",
+    school_clean == "Stephen F. Austin" ~ "SF Austin",
+    school_clean == "Texas A&M-Corpus Christi" ~ "Texas A&M-CC",
+    school_clean == "Virginia Commonwealth" ~ "VCU",
+    school_clean == "Washington State" ~ "Washington St",
+    school_clean == "Weber State" ~ "Weber St",
+    school_clean == "Western Kentucky" ~ "Western KY",
+    school_clean == "Western Michigan" ~ "W Michigan",
+    school_clean == "Wichita State" ~ "Wichita St",
+    school_clean == "Wright State" ~ "Wright St",
+    TRUE ~ school_clean
+  ), .after = school_clean) %>% 
+  filter(!(school_clean %in% c("Long Island University",
+                               "New Orleans",
+                               "Wake Forest"))) %>% 
+  mutate(year = factor(year)) %>% 
+  mutate(conf_w_l = conf_wins / (conf_wins + conf_losses),
+         .after = "conf_losses") %>% 
+  mutate(home_w_l = home_wins / (home_wins + home_losses),
+         .after = "home_losses") %>% 
+  mutate(away_w_l = away_wins / (away_wins + away_losses),
+         .after = "away_losses")
+# Basic stats missing UCSB for some reason
+
+load("data/game_info.RData")
+load("data/pbp_data.RData")
+
+pbp_data_long <- data.frame(pbp_data[["pbp_2024"]])
+
+for(i in 2:length(pbp_data)){
+  pbp_data_long <- rbind(pbp_data_long, pbp_data[[i]])
+}
+
+pbp_data_long <- pbp_data_long %>% 
+  mutate(tournament = year(date), .after = "game_id") %>% 
+  mutate(tournament = factor(tournament))
+
+
+game_info_long <- data.frame(game_info[["game_info_2024"]])
+
+for(i in 2:length(game_info)){
+  game_info_long <- rbind(game_info_long, game_info[[i]])
+}
+
+game_info_long <- game_info_long %>% 
+  mutate(tournament = year(date), .before = "date") %>% 
+  mutate(tournament = factor(tournament))
+```
+
+
+# Fouls per Season vs Tournament
+
+```{r}
+tournament_fouls <- pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("foul on", description)) %>% 
+  mutate(team_on = case_when(
+    action_team == "home" ~ home,
+    action_team == "away" ~ away,
+    TRUE ~ NA
+  ), team_on_seed = case_when(
+    action_team == "home" ~ home_seed,
+    action_team == "away" & away_seed <= 16 ~ away_seed,
+    TRUE ~ NA
+  )) %>% 
+  group_by(tournament, team_on) %>% 
+  summarize(n_fouls = n(),
+            n_games = n_distinct(game_id),
+            team_on_seed = max(team_on_seed)) %>% 
+  ungroup() %>% 
+  mutate(fouls_per_game_tournament = n_fouls / n_games)
+
+basic_stats %>% 
+  group_by(year, school_clean_dict) %>% 
+  summarize(fouls = pf,
+            fouls_per_game_season = pf / games_played) %>% 
+  ungroup() %>% 
+  mutate(year = factor(year)) %>% 
+  right_join(tournament_fouls, by = c("year" = "tournament",
+                                      "school_clean_dict" = "team_on")) %>% 
+  filter(!is.na(fouls) & school_clean_dict != "Miami") %>% 
+  select(fouls_per_game_season, fouls_per_game_tournament) %>% 
+  cor()
+# That is. Shockingly low.
+
+fouls_df <- basic_stats %>% 
+  group_by(year, school_clean_dict) %>% 
+  summarize(fouls = pf,
+            fouls_per_game_season = pf / games_played) %>% 
+  ungroup() %>% 
+  mutate(year = factor(year)) %>% 
+  right_join(tournament_fouls, by = c("year" = "tournament",
+                                      "school_clean_dict" = "team_on")) %>% 
+  filter(!is.na(fouls) & school_clean_dict != "Miami")
+
+
+fouls_df %>% 
+  mutate(school_label = paste0(school_clean_dict, " (", year, ")")) %>% 
+  ggplot(aes(x = fouls_per_game_season, y = fouls_per_game_tournament)) +
+  geom_point(alpha = 0.6, aes(color = year)) +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_abline(intercept = 0, slope = 1, lwd = 1, color = "red") +
+  geom_label_repel(aes(label = if_else(fouls_per_game_season > 19 &
+                                  fouls_per_game_tournament > 25,
+                                school_label,
+                                NA),
+                       fill = year),
+                   min.segment.length = 0) +
+  theme_bw() +
+  labs(x = "Fouls Per Game (Regular Season)",
+       y = "Fouls Per Game (NCAA Tournament)",
+       title = "Fouls Per Game: Tournament vs. Regular Season",
+       color = "Year",
+       fill = "Year") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_color_viridis(discrete = TRUE) +
+  scale_fill_viridis(discrete = TRUE)
+# Are they calling fewer fouls these days?
+
+
+fouls_df %>% 
+  mutate(school_label = paste0(school_clean_dict, " (", year, ")")) %>% 
+  mutate(team_on_seed = factor(team_on_seed)) %>% 
+  ggplot(aes(x = fouls_per_game_season, y = fouls_per_game_tournament)) +
+  geom_point(alpha = 0.6, aes(color = team_on_seed)) +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_abline(intercept = 0, slope = 1, lwd = 1, color = "red") +
+  #geom_label_repel(aes(label = if_else(fouls_per_game_season > 19 &
+  #                                fouls_per_game_tournament > 25,
+  #                              school_label,
+  #                              NA),
+  #                     fill = year),
+  #                 min.segment.length = 0) +
+  theme_bw() +
+  labs(x = "Fouls Per Game (Regular Season)",
+       y = "Fouls Per Game (NCAA Tournament)",
+       title = "Fouls Per Game: Tournament vs. Regular Season",
+       color = "Year",
+       fill = "Year") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_color_viridis(discrete = TRUE) +
+  scale_fill_viridis(discrete = TRUE)
+# No real trend here I don't think
+```
+
+```{r}
+summary(lm(fouls_df$fouls_per_game_tournament ~ fouls_df$fouls_per_game_season))
+# R2 of 0.276 is honestly pretty shocking to me
+
+summary(lm(fouls_per_game_tournament ~ fouls_per_game_season + team_on_seed +
+             fouls_per_game_season*team_on_seed,
+           data = fouls_df))
+# Intriguingly, seed really does not improve the predictions here
+```
+
+```{r}
+fouls_df %>% 
+  select(year, fouls_per_game_season, fouls_per_game_tournament) %>% 
+  rename(Season = fouls_per_game_season,
+         Tournament = fouls_per_game_tournament) %>% 
+  pivot_longer(-year) %>% 
+  group_by(year, name) %>% 
+  summarize(avg_fouls = mean(value)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = year, y = avg_fouls)) +
+  geom_col() +
+  facet_wrap(~name) +
+  theme_bw() +
+  labs(x = "Season", y = "Average Fouls Per Game",
+       title = "Referees Are Calling Fewer Fouls Over Time") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_x_discrete(breaks = seq(2014, 2024, by = 2)) +
+  coord_cartesian(ylim = c(15, 19))
+# I think we should be allowed to marginally mislead our viewers,
+# as a treat
+```
+
+
+```{r}
+foul_diff_df <- pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("foul on", description)) %>% 
+  mutate(team_on = case_when(
+    action_team == "home" ~ home,
+    action_team == "away" ~ away,
+    TRUE ~ NA
+  ), team_on_seed = case_when(
+    action_team == "home" ~ home_seed,
+    action_team == "away" & away_seed <= 16 ~ away_seed,
+    TRUE ~ NA
+  )) %>% 
+  group_by(game_id, tournament, team_on, team_on_seed) %>% 
+  summarize(n_fouls = n()) %>% 
+  ungroup() %>% 
+  left_join(basic_stats %>% mutate(year = factor(year)),
+            by = c("tournament" = "year", 
+                                "team_on" = "school_clean_dict")) %>% 
+  mutate(avg_fouls_season = pf / games_played,
+         foul_diff = n_fouls - avg_fouls_season) %>% 
+  left_join(game_info_long %>% select(game_id, starts_with("referee")),
+            by = "game_id")
+
+fd_mean <- mean(foul_diff_df$foul_diff, na.rm = TRUE)
+fd_sd <- sd(foul_diff_df$foul_diff, na.rm = TRUE)
+
+ggplot(foul_diff_df, aes(x = foul_diff)) +
+  geom_density(fill = "grey") 
+
+summary(foul_diff_df$foul_diff)
+sd(foul_diff_df$foul_diff, na.rm = TRUE)
+
+sd_2 <- c(fd_mean - 2 * fd_sd, fd_mean + 2 * fd_sd)
+
+ref_counts <- game_info_long %>% 
+  select(starts_with("referee")) %>% 
+  pivot_longer(everything(), values_to = "referee") %>% 
+  group_by(referee) %>% 
+  summarize(total_games_reffed = n())
+
+foul_diff_df %>% 
+  filter(foul_diff <= sd_2[1] | foul_diff >= sd_2[2]) %>% 
+  select(tournament, team_on, team_on_seed, n_fouls, avg_fouls_season, foul_diff,
+         starts_with("referee")) %>% 
+  pivot_longer(starts_with("referee"), names_to = "ref_id",
+               values_to = "referee") %>% 
+  group_by(referee) %>% 
+  summarize(n_occurences = n(),
+            mean_diff = mean(foul_diff),
+            mean_abs_diff = mean(abs(foul_diff))) %>% 
+  ungroup() %>% 
+  left_join(ref_counts, by = "referee") %>% 
+  mutate(pct_of_games_reffed = n_occurences / total_games_reffed) %>% 
+  arrange(desc(n_occurences))
+# Generally it is 15-20% of their games refereed, at least for the top offenders
+
+foul_diff_df %>% 
+  filter(foul_diff <= sd_2[1] | foul_diff >= sd_2[2]) %>% 
+  select(tournament, team_on, team_on_seed, n_fouls, avg_fouls_season, foul_diff,
+         starts_with("referee")) %>% 
+  pivot_longer(starts_with("referee"), names_to = "ref_id",
+               values_to = "referee") %>% 
+  group_by(referee) %>% 
+  summarize(n_occurences = n(),
+            mean_diff = mean(foul_diff),
+            mean_abs_diff = mean(abs(foul_diff))) %>% 
+  ungroup() %>% 
+  left_join(ref_counts, by = "referee") %>% 
+  mutate(pct_of_games_reffed = n_occurences / total_games_reffed) %>% 
+  ggplot(aes(x = pct_of_games_reffed)) +
+  geom_density(fill = "grey")
+
+
+
+
+foul_diff_df %>% 
+  #filter(foul_diff <= sd_2[1] | foul_diff >= sd_2[2]) %>% 
+  select(tournament, team_on, team_on_seed, n_fouls, avg_fouls_season, foul_diff,
+         starts_with("referee")) %>% 
+  pivot_longer(starts_with("referee"), names_to = "ref_id",
+               values_to = "referee") %>% 
+  filter(!is.na(foul_diff)) %>% 
+  group_by(referee) %>% 
+  summarize(#n_occurences = n(),
+            mean_diff = mean(foul_diff),
+            mean_abs_diff = mean(abs(foul_diff))) %>% 
+  ungroup() %>% 
+  left_join(ref_counts, by = "referee") %>% 
+  #mutate(pct_of_games_reffed = n_occurences / (total_games_reffed*2)) %>% 
+  #mutate(skewed_calls = abs(mean_abs_diff - abs(mean_diff))) %>% 
+  filter(total_games_reffed > 2) %>% 
+  arrange(desc(abs(mean_diff))) %>% 
+  print(n = 138)
+# Looking at all of the data, most of the leaders call fewer fouls than expected
+# Karl Hess is on a bender, though
+
+
+refs_of_interest <- foul_diff_df %>% 
+  select(tournament, team_on, team_on_seed, n_fouls, avg_fouls_season, foul_diff,
+         starts_with("referee")) %>% 
+  pivot_longer(starts_with("referee"), names_to = "ref_id",
+               values_to = "referee") %>% 
+  filter(!is.na(foul_diff)) %>% 
+  group_by(referee) %>% 
+  summarize(mean_diff = mean(foul_diff),
+            mean_abs_diff = mean(abs(foul_diff))) %>% 
+  ungroup() %>% 
+  left_join(ref_counts, by = "referee") %>% 
+  filter(total_games_reffed > 2) %>% 
+  arrange(desc(abs(mean_diff))) %>% 
+  head(20) %>% 
+  pull(referee)
+
+foul_diff_df %>% 
+  pivot_longer(starts_with("referee"), values_to = "referee") %>% 
+  filter(referee %in% refs_of_interest) %>% 
+  group_by(referee) %>% 
+  mutate(more_than_normal = if_else(median(foul_diff) > 0, "more", "fewer")) %>% 
+  ungroup() %>% 
+  select(referee, foul_diff, more_than_normal) %>% 
+  ggplot(aes(x = foul_diff, fill = more_than_normal)) +
+  geom_density(alpha = 0.6) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  facet_wrap(~referee) +
+  theme_bw() +
+  labs(x = "Tournament Fouls vs. Regular Season", y = "Percent of Games",
+       fill = "Calls vs. Regular Season") +
+  theme(panel.grid = element_blank(),
+        legend.position = "bottom")
+# Let's try coloring this by number of games refereed, actually
+
+
+foul_diff_df %>% 
+  pivot_longer(starts_with("referee"), values_to = "referee") %>% 
+  filter(referee %in% refs_of_interest) %>% 
+  group_by(referee) %>% 
+  mutate(more_than_normal = if_else(median(foul_diff) > 0, "more", "fewer")) %>% 
+  ungroup() %>% 
+  select(referee, foul_diff, more_than_normal) %>% 
+  group_by(referee) %>% 
+  mutate(n_games = n() / 2,
+         med_diff = median(foul_diff),
+         mean_diff = mean(foul_diff)) %>% 
+  ungroup() %>% 
+  mutate(name_label = paste0(referee, " (", round(mean_diff, 2), ")")) %>% 
+  ggplot(aes(x = foul_diff, fill = n_games)) +
+  geom_density(alpha = 0.6) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  facet_wrap(~reorder(name_label, mean_diff)) +
+  theme_bw() +
+  labs(x = "Tournament Fouls vs. Regular Season", y = "Percent of Games",
+       fill = "Number of Games Officiated",
+       title = "Officials Whose Games Frequently Vary From Regular-Season Expectations",
+       caption = "Numbers represent mean deviation from regular-season fouls") +
+  theme(panel.grid.minor = element_blank(),
+        legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5)) +
+  scale_fill_viridis(direction = -1) +
+  scale_y_continuous(labels = scales::percent_format(), breaks = seq(0, .2, .1)) +
+  scale_x_continuous(breaks = seq(-10, 10, by = 10))
+# Let's try coloring this by number of
+```
+
+```{r}
+foul_diff_df %>% 
+  left_join(game_info_long, by = "game_id") %>% 
+  select(foul_diff, score_diff, line_error, abs_line_error) %>% 
+  mutate(abs_foul_diff = abs(foul_diff), .after = foul_diff) %>% 
+  na.omit() %>% 
+  cor()
+# No major correlations between foul calls and betting lines
+# Make sure to remove duplicity in foul calls (i.e., may be x3 for every game)
+```
+
+
+# Predicted Winners
+
+```{r}
+game_info_winner <- game_info_long %>% 
+  mutate(projected_winner = case_when(
+    home_favored_by >= 0 ~ "home",
+    home_favored_by < 0 ~ "away",
+    TRUE ~ NA
+  ), .after = "away") %>% 
+  filter(!is.na(projected_winner)) %>% 
+  mutate(projected_winner = factor(projected_winner, levels = c("away", "home")))
+
+pbp_proj_winner <- pbp_data_long %>% 
+  filter(play_id == 1) %>% 
+  mutate(projected_winner = case_when(
+    win_prob >= 0.5 ~ "home",
+    win_prob < 0.5 ~ "away",
+    TRUE ~ NA
+  ), .after = "away") %>% 
+  filter(!is.na(projected_winner)) %>% 
+  mutate(projected_winner = factor(projected_winner, levels = c("away", "home")))
+
+
+predicting_winners <- foul_diff_df %>% 
+  left_join(pbp_proj_winner %>% select(game_id, projected_winner, win_prob),
+            by = "game_id") %>% 
+  left_join(game_info_long %>% select(game_id, score_diff,
+                                      line_error, abs_line_error, home),
+            by = "game_id") %>% 
+  mutate(which_team = if_else(home == team_on, "home", "away"),
+         .after = team_on) %>% 
+  select(game_id, tournament, team_on, which_team, team_on_seed, n_fouls,
+         avg_fouls_season, foul_diff, starts_with("referee"), projected_winner,
+         win_prob, score_diff, line_error, abs_line_error)
+
+predicting_winners_home <- predicting_winners %>% 
+  filter(which_team == "home")
+
+pred_winner_foul_diff <- logistic_reg() %>% 
+  fit(projected_winner ~ foul_diff, data = predicting_winners_home)
+
+tidy(pred_winner_foul_diff) # Not significant
+
+
+predicting_winners_home_2 <- predicting_winners_home %>% 
+  pivot_longer(starts_with("referee"), values_to = "referee") %>% 
+  select(-name)
+
+pred_winner_ref <- logistic_reg() %>% 
+  fit(projected_winner ~ referee, data = predicting_winners_home_2)
+
+tidy(pred_winner_ref) %>% 
+  arrange(p.value)
+# This may be the singular worst data science I've ever done
+# Edwin Young (our leader in calling too many fouls) is the only one
+# who is marginally significant
+
+
+predicting_winners_home_2 <- predicting_winners_home_2 %>% 
+  mutate(of_interest = if_else(referee %in% refs_of_interest, TRUE, FALSE))
+
+pred_winner_ref_2 <- logistic_reg() %>% 
+  fit(projected_winner ~ of_interest, data = predicting_winners_home_2)
+
+tidy(pred_winner_ref_2)
+# Not significant
+
+logistic_reg() %>% 
+  fit(projected_winner ~ referee + foul_diff + foul_diff*referee,
+      data = predicting_winners_home_2) %>% 
+  tidy() %>% 
+  arrange(p.value)
+# We should stop doing this lol
+
+
+linear_reg() %>% 
+  fit(line_error ~ referee, data = predicting_winners_home_2) %>% 
+  tidy() %>% 
+  arrange(p.value)
+
+
+summary(lm(line_error ~ foul_diff, data = predicting_winners_home_2))
+# If teams are called for fewer fouls than their average game in the regular season,
+# We predict that the line error will be negative
+# Which means that if a team is called for fewer fouls than its average game,
+# we actually predict that they underperform
+# This makes no sense
+
+```
+
+
+## Edwin Young
+
+```{r}
+game_info_long %>% 
+  pivot_longer(starts_with("referee"), values_to = "referee") %>% 
+  filter(grepl("Edwin  Young", referee)) %>% 
+  left_join(foul_diff_df, by = "game_id") %>% 
+  select(team_on, home, away, home_score, away_score, home_favored_by, total_line,
+         over_under, line_error, abs_line_error, n_fouls, avg_fouls_season,
+        foul_diff) %>% 
+  glimpse()
+
+
+```
+
+
+## Fewer fouls in tournament compared to regular season?
+
+```{r}
+fouls_df %>% 
+  mutate(foul_diff = fouls_per_game_tournament - fouls_per_game_season) %>% 
+  group_by(year) %>% 
+  summarize(Mean = mean(foul_diff),
+            Median = median(foul_diff),
+            #n_games = n(),
+            mean_fouls_tournament = mean(n_fouls / n_games)) %>% 
+  ungroup() %>% 
+  pivot_longer(c(Mean, Median), names_to = "stat", values_to = "diff") %>% 
+  ggplot(aes(x = year, y = diff, fill = mean_fouls_tournament)) +
+  geom_col() +
+  facet_wrap(~stat) +
+  theme_bw() +
+  labs(x = "Tournament", y = "Surplus Fouls in Tournament",
+       title = "Referees Call Slightly More Fouls in NCAAT, On Average",
+       fill = "Average Fouls per Team per Game") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_fill_viridis(direction = -1, breaks = seq(16, 19))
+```
+
+# Little bit of success prediction
+
+```{r}
+
+tournament_winners <- game_info_long %>% 
+  group_by(tournament) %>% 
+  slice_max(date) %>% 
+  ungroup() %>% 
+  mutate(winner = if_else(score_diff > 0, home, away)) %>% 
+  select(tournament, winner)
+
+# For the sake of argument, let's filter out the first four games
+tournament_wins <- game_info_long %>% 
+  pivot_longer(c("home", "away"), names_to = "which_team",
+               values_to = "school") %>% 
+  filter(arena_location != "Dayton, OH" & date != "2021-03-18") %>% 
+  group_by(tournament, school) %>% 
+  summarize(n_games = n()) %>% 
+  ungroup() %>% 
+  left_join(tournament_winners, by = "tournament") %>% 
+  mutate(won_natty = if_else(school == winner, TRUE, FALSE)) %>% 
+  select(-winner) %>% 
+  mutate(total_wins = n_games + won_natty - 1) %>% 
+  mutate(tournament_round = case_when(
+    total_wins == 0 ~ "R64",
+    total_wins == 1 ~ "R32",
+    total_wins == 2 ~ "S16",
+    total_wins == 3 ~ "E8",
+    total_wins == 4 ~ "F4",
+    total_wins == 5 ~ "Runner-Up",
+    total_wins == 6 ~ "Champion",
+    TRUE ~ NA
+  )) %>% 
+  mutate(tournament_round = factor(tournament_round, levels = c("R64", "R32",
+                                                                "S16", "E8",
+                                                                "F4",
+                                                                "Runner-Up",
+                                                                "Champion")))
+  #group_by(tournament) %>% 
+  #summarize(total_wins = sum(total_wins)) # Yields correct number of games
+
+
+# ID the first four games
+game_info_long %>% 
+  filter(arena_location == "Dayton, OH" | date == "2021-03-18") %>% 
+  group_by(tournament) %>% 
+  summarize(n = n())
+
+# ID first four games in 2021
+game_info_long %>% 
+  filter(tournament == 2021) %>% 
+  arrange(date) %>% 
+  glimpse()
+```
+
+
+```{r}
+tournament_preds <- tournament_wins %>% 
+  left_join(basic_stats, by = c("tournament" = "year",
+                                "school" = "school_clean_dict"))
+
+# Significant, but not that meaningful
+linear_reg() %>% 
+  fit(total_wins ~ simple_rating_system, data = tournament_preds) %>% 
+  tidy()
+
+# Significant and perhaps more meaningful
+linear_reg() %>% 
+  fit(total_wins ~ strength_of_schedule, data = tournament_preds) %>% 
+  tidy()
+
+
+
+tournament_preds <- tournament_wins %>% 
+  left_join(basic_stats, by = c("tournament" = "year",
+                                "school" = "school_clean_dict")) %>% 
+  left_join(ap_polls, by = c("tournament" = "year",
+                             "school" = "school_dict")) %>% 
+  left_join(coaches_polls, by = c("tournament" = "year",
+                                  "school" = "school_dict"),
+            suffix = c("_ap", "_coaches"))
+
+
+polls_model <- linear_reg() %>% 
+  fit(total_wins ~ w_l + simple_rating_system + strength_of_schedule +
+        conf_w_l + home_w_l + away_w_l + pre_ap + week_8_ap + 
+        pre_coaches + week_8_coaches, data = tournament_preds)
+
+tidy(polls_model)
+
+polls_model$fit$df.residual # Not too many left
+
+
+polls_model_logistic <- multinom_reg() %>% 
+  fit(tournament_round ~ w_l + simple_rating_system + strength_of_schedule +
+        conf_w_l + home_w_l + away_w_l + pre_ap + week_8_ap + 
+        pre_coaches + week_8_coaches, data = tournament_preds)
+
+tidy(polls_model_logistic) %>% 
+  arrange(p.value) %>% 
+  print(n = 66)
+
+
+
+polls_model_propodds <- polr(tournament_round ~ w_l + simple_rating_system +
+                               strength_of_schedule +
+        conf_w_l + home_w_l + away_w_l + pre_ap + week_8_ap + 
+        pre_coaches + week_8_coaches, data = tournament_preds,
+        method = "logistic", Hess = TRUE)
+
+summary(polls_model_propodds)
+
+
+brant::brant(polls_model_propodds)
+```
+
+
+```{r}
+tournament_preds_fct <- tournament_preds %>% 
+  mutate(across(c(starts_with("week_"), pre_ap, final_ap,
+                  pre_coaches, final_coaches), ~ case_when(
+    . < 5 ~ "1-5",
+    . < 10 ~ "6-10",
+    . < 15 ~ "11-15",
+    . < 20 ~ "16-20",
+    . < 25 ~ "21-25",
+    is.na(.) ~ "Unranked",
+    TRUE ~ NA
+  ))) %>% 
+  mutate(across(c(starts_with("week_"), pre_ap, final_ap,
+                  pre_coaches, final_coaches), ~ factor(., levels = c("1-5", "6-10",
+                                                             "11-15", "16-20",
+                                                             "21-25", "Unranked",
+                                                             NA))))
+
+tournament_preds_fct %>% 
+  dplyr::select(tournament, starts_with("week_"), pre_ap, final_ap,
+                  pre_coaches, final_coaches,
+                #pre_tournament_ap, pre_tournament_coaches
+                ) %>% 
+  mutate(across(c(starts_with("week_"), pre_ap, final_ap,
+                  pre_coaches, final_coaches,
+                  #pre_tournament_ap, pre_tournament_coaches
+                  ),
+                ~ if_else(. %in% c("1-5", "6-10", "11-15", "16-20", "21-25"),
+                          TRUE, FALSE))) %>% 
+  group_by(tournament) %>% 
+  summarize(across(ends_with("ap") | ends_with("coaches"), ~sum(. == TRUE))) %>% 
+  ungroup() %>% 
+  glimpse()
+
+
+tournament_preds_fct <- tournament_preds_fct %>% 
+  mutate(pre_tournament_ap = case_when(
+    tournament == 2021 ~ week_16_ap,
+    tournament %in% c(2015, 2016, 2017, 2018, 2022, 2023) ~ week_18_ap,
+    tournament %in% c(2014, 2019) ~ week_19_ap,
+    tournament == 2024 ~ week_20_ap,
+    TRUE ~ NA
+  ), .before = "final_ap") %>% 
+  mutate(pre_tournament_coaches = case_when(
+    tournament == 2021 ~ week_16_coaches,
+    tournament %in% c(2018, 2022) ~ week_18_coaches,
+    tournament %in% c(2015, 2016, 2017, 2019, 2023) ~ week_19_coaches,
+    tournament %in% c(2014, 2024) ~ week_20_coaches,
+    TRUE ~ NA
+  ), .before = "final_coaches") %>% 
+  glimpse()
+
+
+
+tournament_preds_fct_reduced <- tournament_preds_fct %>% 
+  dplyr::select(total_wins, tournament_round, starts_with("week_"),
+                pre_ap, final_ap,
+                pre_coaches, final_coaches,
+                pre_tournament_ap, pre_tournament_coaches) %>% 
+  dplyr::select(-starts_with(c("week_17", "week_18", "week_19", "week_20"))) %>% 
+  na.omit()
+
+
+
+# All weeks, including final
+
+set.seed(526)
+wins_rf <- randomForest(total_wins ~ .-tournament_round,
+                        data = tournament_preds_fct_reduced,
+                  importance = TRUE)
+
+varImpPlot(wins_rf)
+# Far and away final coaches, as well as final AP
+# For %IncMSE, it's actually week 3 for both - improves beyond pre-tournament poll
+# For IncNodePurity, it's the pre-tournament polls, as well as week 3-4 coaches and week 4 ap
+
+
+
+# All weeks excluding final
+tournament_preds_fct_reduced_2 <- tournament_preds_fct_reduced %>% 
+  dplyr::select(-starts_with("final"))
+
+set.seed(526)
+wins_rf2 <- randomForest(total_wins ~ .-tournament_round,
+                        data = tournament_preds_fct_reduced_2,
+                  importance = TRUE)
+
+varImpPlot(wins_rf2)
+# For MSE, week 3-4 AP, preseason coaches & pre-tournament ap
+# For purity, week 3 & 16 coaches, pre-tournament ap, and both for week 4
+
+
+# Just AP
+
+tpfr_ap <- tournament_preds_fct_reduced_2 %>% 
+  dplyr::select(!ends_with("coaches"))
+
+set.seed(526)
+wins_rf_ap <- randomForest(total_wins ~ .-tournament_round,
+                        data = tpfr_ap,
+                  importance = TRUE)
+
+varImpPlot(wins_rf_ap)
+# For both: week 4 is biggest, preseason and pre-tournament both top 4
+# For MSE: week 3
+# For purity: week 16
+
+
+# Just Coaches
+tpfr_coaches <- tournament_preds_fct_reduced_2 %>% 
+  dplyr::select(!ends_with("ap"))
+
+set.seed(526)
+wins_rf_coaches <- randomForest(total_wins ~ .-tournament_round,
+                        data = tpfr_coaches,
+                  importance = TRUE)
+
+varImpPlot(wins_rf_coaches)
+# For both: weeek 4 and week 3
+# For MSE: preseason and week 11
+# For purity: pre-tournament and week 16
+```
+
+
+```{r}
+# All weeks, including final
+set.seed(526)
+wins_rf <- randomForest(tournament_round ~ .-total_wins,
+                        data = tournament_preds_fct_reduced,
+                  importance = TRUE)
+
+varImpPlot(wins_rf)
+# Far and away final coaches, as well as final AP
+# For accuracy, week 3 ap and preseason coaches
+# For gini, week 16 coaches and pre-tournament AP
+
+
+
+# All weeks excluding final
+set.seed(526)
+wins_rf2 <- randomForest(tournament_round ~ .-total_wins,
+                        data = tournament_preds_fct_reduced_2,
+                  importance = TRUE)
+
+varImpPlot(wins_rf2)
+# For accuracy, pre-season polls, as well as week 3-4 ap and week 16 (both)
+# For gini, week 16, pre-tournament, and week 4 (all for both)
+
+
+# Just AP
+set.seed(526)
+wins_rf_ap <- randomForest(tournament_round ~ .-total_wins,
+                        data = tpfr_ap,
+                  importance = TRUE)
+
+varImpPlot(wins_rf_ap)
+# For both: week 3, 4, 16
+# For accuracy: preseason
+# For gini: week 16
+
+
+# Just Coaches
+set.seed(526)
+wins_rf_coaches <- randomForest(tournament_round ~ .-total_wins,
+                        data = tpfr_coaches,
+                  importance = TRUE)
+
+varImpPlot(wins_rf_coaches)
+# For both: week 16
+# For accuracy: preseason, week 3-4
+# For gini: week 13, 15, pre-tournament
+```
+
+
+## Give me everything tonight
+
+```{r}
+tournament_preds_fct_all <- tournament_preds_fct %>% 
+  select(total_wins, tournament_round, starts_with("week_"),
+                pre_ap, final_ap,
+                pre_coaches, final_coaches,
+                pre_tournament_ap, pre_tournament_coaches,
+         simple_rating_system, strength_of_schedule,
+         w_l, conf_w_l, home_w_l, away_w_l) %>% 
+  select(-starts_with(c("week_17", "week_18", "week_19", "week_20"))) %>% 
+  select(-starts_with("final")) %>% 
+  na.omit()
+
+
+set.seed(526)
+rf_all_wins <- randomForest(total_wins ~ .-tournament_round,
+                            data = tournament_preds_fct_all,
+                            importance = TRUE)
+
+varImpPlot(rf_all_wins)
+# Easily goes simple rating system -> win/loss -> SOS for both
+# MSE favors the other w/l records as well
+# Purity favors the known best-performing polls
+
+
+set.seed(526)
+rf_all_round <- randomForest(tournament_round ~ .-total_wins,
+                             data = tournament_preds_fct_all,
+                             importance = TRUE)
+
+varImpPlot(rf_all_round)
+# Same jaunt, but SOS matters more than win/loss
+# Accuracy: favors known best-performing polls
+# Gini: favors the win/loss metrics
+# I think this is kind of the opposite of how it behaved in the continuous model?
+```
+
+
+
+
+
+
