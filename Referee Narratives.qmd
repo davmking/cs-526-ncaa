@@ -98,7 +98,14 @@ basic_stats <- read.csv("FeatureElimination/Basic_Stats.csv") %>%
   ), .after = school_clean) %>% 
   filter(!(school_clean %in% c("Long Island University",
                                "New Orleans",
-                               "Wake Forest")))
+                               "Wake Forest"))) %>% 
+  mutate(year = factor(year)) %>% 
+  mutate(conf_w_l = conf_wins / (conf_wins + conf_losses),
+         .after = "conf_losses") %>% 
+  mutate(home_w_l = home_wins / (home_wins + home_losses),
+         .after = "home_losses") %>% 
+  mutate(away_w_l = away_wins / (away_wins + away_losses),
+         .after = "away_losses")
 # Basic stats missing UCSB for some reason
 
 load("data/game_info.RData")
@@ -201,6 +208,103 @@ refs_of_interest <- foul_diff_df %>%
   arrange(desc(abs(mean_diff))) %>% 
   head(20) %>% 
   pull(referee)
+
+load("data/ap_polls.RData")
+load("data/coaches_polls.RData")
+
+tournament_winners <- game_info_long %>% 
+  group_by(tournament) %>% 
+  slice_max(date) %>% 
+  ungroup() %>% 
+  mutate(winner = if_else(score_diff > 0, home, away)) %>% 
+  select(tournament, winner)
+
+# For the sake of argument, let's filter out the first four games
+tournament_wins <- game_info_long %>% 
+  pivot_longer(c("home", "away"), names_to = "which_team",
+               values_to = "school") %>% 
+  filter(arena_location != "Dayton, OH" & date != "2021-03-18") %>% 
+  group_by(tournament, school) %>% 
+  summarize(n_games = n()) %>% 
+  ungroup() %>% 
+  left_join(tournament_winners, by = "tournament") %>% 
+  mutate(won_natty = if_else(school == winner, TRUE, FALSE)) %>% 
+  select(-winner) %>% 
+  mutate(total_wins = n_games + won_natty - 1) %>% 
+  mutate(tournament_round = case_when(
+    total_wins == 0 ~ "R64",
+    total_wins == 1 ~ "R32",
+    total_wins == 2 ~ "S16",
+    total_wins == 3 ~ "E8",
+    total_wins == 4 ~ "F4",
+    total_wins == 5 ~ "Runner-Up",
+    total_wins == 6 ~ "Champion",
+    TRUE ~ NA
+  )) %>% 
+  mutate(tournament_round = factor(tournament_round, levels = c("R64", "R32",
+                                                                "S16", "E8",
+                                                                "F4",
+                                                                "Runner-Up",
+                                                                "Champion")))
+
+tournament_preds <- tournament_wins %>% 
+  left_join(basic_stats, by = c("tournament" = "year",
+                                "school" = "school_clean_dict")) %>% 
+  left_join(ap_polls, by = c("tournament" = "year",
+                             "school" = "school_dict")) %>% 
+  left_join(coaches_polls, by = c("tournament" = "year",
+                                  "school" = "school_dict"),
+            suffix = c("_ap", "_coaches"))
+
+tournament_preds_fct <- tournament_preds %>% 
+  mutate(across(c(starts_with("week_"), pre_ap, final_ap,
+                  pre_coaches, final_coaches), ~ case_when(
+    . < 5 ~ "1-5",
+    . < 10 ~ "6-10",
+    . < 15 ~ "11-15",
+    . < 20 ~ "16-20",
+    . < 25 ~ "21-25",
+    is.na(.) ~ "Unranked",
+    TRUE ~ NA
+  ))) %>% 
+  mutate(across(c(starts_with("week_"), pre_ap, final_ap,
+                  pre_coaches, final_coaches), ~ factor(., levels = c("1-5", "6-10",
+                                                             "11-15", "16-20",
+                                                             "21-25", "Unranked",
+                                                             NA))))
+
+tournament_preds_fct <- tournament_preds_fct %>% 
+  mutate(pre_tournament_ap = case_when(
+    tournament == 2021 ~ week_16_ap,
+    tournament %in% c(2015, 2016, 2017, 2018, 2022, 2023) ~ week_18_ap,
+    tournament %in% c(2014, 2019) ~ week_19_ap,
+    tournament == 2024 ~ week_20_ap,
+    TRUE ~ NA
+  ), .before = "final_ap") %>% 
+  mutate(pre_tournament_coaches = case_when(
+    tournament == 2021 ~ week_16_coaches,
+    tournament %in% c(2018, 2022) ~ week_18_coaches,
+    tournament %in% c(2015, 2016, 2017, 2019, 2023) ~ week_19_coaches,
+    tournament %in% c(2014, 2024) ~ week_20_coaches,
+    TRUE ~ NA
+  ), .before = "final_coaches") 
+
+tournament_preds_fct_reduced <- tournament_preds_fct %>% 
+  select(total_wins, tournament_round, starts_with("week_"),
+                pre_ap, final_ap,
+                pre_coaches, final_coaches,
+                pre_tournament_ap, pre_tournament_coaches) %>% 
+  dplyr::select(-starts_with(c("week_17", "week_18", "week_19", "week_20"))) %>% 
+  na.omit()
+
+tournament_preds_fct_reduced_2 <- tournament_preds_fct_reduced %>% 
+  dplyr::select(-starts_with("final"))
+
+tpfr_ap <- tournament_preds_fct_reduced_2 %>% 
+  dplyr::select(!ends_with("coaches"))
+
+tpfr_coaches <- tournament_preds_fct_reduced_2 %>% 
+  dplyr::select(!ends_with("ap"))
 ```
 
 
