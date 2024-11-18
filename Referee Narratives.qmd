@@ -604,3 +604,89 @@ fouls_df %>%
 
 In general, fouls in the tournament and fouls in the regular season are actually very closely aligned - they are almost always within a foul per game (per team) of one another. I am curious what changed from 2019/2021 to 2022 - 2022 saw a huge spike in surplus fouls called, following a couple years of that metric being down.
 
+Now we get to everyone's favorite question: Are the referees rigging my game?
+
+```{r}
+#| label: refs of interest plot
+
+foul_diff_df %>% 
+  pivot_longer(starts_with("referee"), values_to = "referee") %>% 
+  filter(referee %in% refs_of_interest) %>% 
+  group_by(referee) %>% 
+  mutate(more_than_normal = if_else(median(foul_diff) > 0, "more", "fewer")) %>% 
+  ungroup() %>% 
+  select(referee, foul_diff, more_than_normal) %>% 
+  group_by(referee) %>% 
+  mutate(n_games = n() / 2,
+         med_diff = median(foul_diff),
+         mean_diff = mean(foul_diff)) %>% 
+  ungroup() %>% 
+  mutate(name_label = paste0(referee, " (", round(mean_diff, 2), ")")) %>% 
+  ggplot(aes(x = foul_diff, fill = n_games)) +
+  geom_density(alpha = 0.6) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  facet_wrap(~reorder(name_label, mean_diff)) +
+  theme_bw() +
+  labs(x = "Surplus Fouls in Tourrnament", y = "Percent of Games",
+       fill = "Number of Games Officiated",
+       title = "Officials Whose Games Frequently Vary From Regular-Season Expectations",
+       caption = "Numbers represent mean deviation from regular-season fouls") +
+  theme(panel.grid.minor = element_blank(),
+        legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5)) +
+  scale_fill_viridis(direction = -1) +
+  scale_y_continuous(labels = scales::percent_format(), breaks = seq(0, .2, .1)) +
+  scale_x_continuous(breaks = seq(-10, 10, by = 10))
+```
+
+We can see there are some referees who frequently officiate games in which a disparate number of fouls are called. However, these are uncommon. Of the ones we did consider, it is far more common for the officiated games to have fewer fouls called compared to the regular season, rather than more.
+
+
+```{r}
+pbp_data_long %>% 
+  select(description) %>% 
+  unnest_tokens(word, description, token = "ngrams",, n = 2) %>% 
+  group_by(word) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  head(50) %>% 
+  print(n = 50)
+
+# "Free throw" is fourth
+
+foul_disparity_games <- pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("free throw", description)) %>% 
+  mutate(team_shooting = if_else(action_team == "home", home, away)) %>% 
+  group_by(game_id, tournament, referee_1, referee_2, referee_3, action_team,
+           team_shooting) %>% 
+  summarize(n_free_throws = n()) %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = action_team, values_from = n_free_throws,
+              id_cols = game_id) %>% 
+  mutate(foul_disparity = abs(away - home),
+         home_cooking = home - away) %>% 
+  select(game_id, foul_disparity, home_cooking)
+
+
+foul_disparity_games <- foul_disparity_games %>% 
+  left_join(pbp_data_long, by = "game_id")
+
+# Mostly pretty low, but there are some kinda crazy disparities
+ggplot(foul_disparity_games, aes(x = foul_disparity)) +
+  geom_histogram(color = "white", binwidth = 1)
+
+
+foul_disparity_games %>% 
+  arrange(desc(foul_disparity))
+
+foul_disparity_games %>% 
+  filter(game_id == 401408616) %>% 
+  arrange(play_id) %>% 
+  select(play_id, half, time_remaining_half, action_team, description) %>% 
+  print(n = 346)
+```
+
+
+
