@@ -1,6 +1,6 @@
 ---
 title: "Referee Narratives"
-format: pdf
+format: html
 ---
 
 # Libraries and Data
@@ -325,6 +325,18 @@ foul_disparity_games <- pbp_data_long %>%
 
 foul_disparity_games <- foul_disparity_games %>% 
   left_join(game_info_long, by = "game_id")
+
+
+tournament_preds_fct_all <- tournament_preds_fct %>% 
+  select(total_wins, tournament_round, starts_with("week_"),
+                pre_ap, final_ap,
+                pre_coaches, final_coaches,
+                pre_tournament_ap, pre_tournament_coaches,
+         simple_rating_system, strength_of_schedule,
+         w_l, conf_w_l, home_w_l, away_w_l) %>% 
+  select(-starts_with(c("week_17", "week_18", "week_19", "week_20"))) %>% 
+  select(-starts_with("final")) %>% 
+  na.omit()
 ```
 
 
@@ -472,7 +484,8 @@ set.seed(526)
 rf_all_polls_wins <- randomForest(total_wins ~ .-tournament_round,
                                   data = tournament_preds_fct_reduced_2,
                                   importance = TRUE)
-varImpPlot(rf_all_polls_wins)
+varImpPlot(rf_all_polls_wins,
+           main = "Strongest Predictors for Total Wins among Polls")
 
 set.seed(526)
 rf_all_polls_round <- randomForest(tournament_round ~ .-total_wins,
