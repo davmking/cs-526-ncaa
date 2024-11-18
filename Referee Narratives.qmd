@@ -346,19 +346,22 @@ tournament_preds_fct_all <- tournament_preds_fct %>%
 #| label: betting line plot
 
 game_info_long %>% 
-  filter(!is.na(line_error)) %>% 
+  filter(!is.na(line_error)) %>%
   ggplot(aes(x = line_error)) +
-  geom_density(fill = "grey") +
+  geom_density(fill = "grey", alpha = 0.6) +
   geom_vline(xintercept = median(game_info_long$line_error,
                                  na.rm = TRUE),
              linetype = "dashed") +
   theme_bw() +
-  labs(x = "Home Team Performance vs. Betting Line",
+  labs(x = "High Seed Performance vs. Betting Line",
        y = "Density",
-       title = "Betting Lines Overestimate Higher Seeds",
-       subtitle = "Negative Values = Underperformance") +
+       title = "Betting Lines Slightly Overestimate Higher Seeds",
+       subtitle = "Negative Values = Underperformance",
+       caption = "Data from 2014-2024") +
   theme(plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5))
+        plot.subtitle = element_text(hjust = 0.5),
+        panel.grid = element_blank()) +
+  scale_y_continuous(labels = scales::percent_format())
 # Negative score = we overestimated the team
 # Negative score = home team underperformed expectations by x
 ```
@@ -385,12 +388,14 @@ game_info_long %>%
              linetype = "dashed") +
   facet_wrap(~tournament, nrow = 2) +
   theme_bw() +
-  labs(x = "Home Team Performance vs. Betting Line",
+  labs(x = "Higher Seed Performance vs. Betting Line",
        y = "Density",
-       title = "Betting Lines Overestimate Higher Seeds",
+       title = "Betting Lines Slightly Overestimate Higher Seeds",
        subtitle = "Negative Values = Underperformance") +
   theme(plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5))
+        plot.subtitle = element_text(hjust = 0.5),
+        panel.grid = element_blank()) +
+  scale_y_continuous(labels = scales::percent_format())
 
 
 game_info_long %>% 
@@ -434,10 +439,16 @@ game_info_long %>%
   theme_bw() +
   labs(x = "Total Score vs. Over/Under", y = "Density",
        title = "Bettors Overestimate Total Points, Except For Overtime Games",
-       fill = "Number of Games") +
+       fill = "# of Games",
+       subtitle = "Negative Values = Underperformance",
+       caption = "Data from 2014-2024") +
   theme(plot.title = element_text(hjust = 0.5),
-        legend.position = "bottom") +
-  scale_fill_viridis(discrete = TRUE)
+        plot.subtitle = element_text(hjust = 0.5),
+        #legend.position = "bottom",
+        panel.grid = element_blank()) +
+  scale_fill_viridis(discrete = TRUE) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  guides(fill = guide_legend(reverse = TRUE))
 ```
 
 In general, bettors set the over/under for games a little bit higher than is achieved empirically - with the exception of overtime games, which tend to go well over. However, overtime games are exceedingly rare, and not worth anticipating.
