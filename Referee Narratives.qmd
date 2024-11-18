@@ -307,6 +307,24 @@ tpfr_ap <- tournament_preds_fct_reduced_2 %>%
 
 tpfr_coaches <- tournament_preds_fct_reduced_2 %>% 
   dplyr::select(!ends_with("ap"))
+
+foul_disparity_games <- pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("free throw", description)) %>% 
+  mutate(team_shooting = if_else(action_team == "home", home, away)) %>% 
+  group_by(game_id, tournament, referee_1, referee_2, referee_3, action_team,
+           team_shooting) %>% 
+  summarize(n_free_throws = n()) %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = action_team, values_from = n_free_throws,
+              id_cols = game_id) %>% 
+  mutate(foul_disparity = abs(away - home),
+         home_cooking = home - away) %>% 
+  select(game_id, foul_disparity, home_cooking)
+
+
+foul_disparity_games <- foul_disparity_games %>% 
+  left_join(game_info_long, by = "game_id")
 ```
 
 
@@ -643,35 +661,7 @@ We can see there are some referees who frequently officiate games in which a dis
 
 
 ```{r}
-pbp_data_long %>% 
-  select(description) %>% 
-  unnest_tokens(word, description, token = "ngrams",, n = 2) %>% 
-  group_by(word) %>% 
-  summarize(n = n()) %>% 
-  ungroup() %>% 
-  arrange(desc(n)) %>% 
-  head(50) %>% 
-  print(n = 50)
-
-# "Free throw" is fourth
-
-foul_disparity_games <- pbp_data_long %>% 
-  mutate(description = str_to_lower(description)) %>% 
-  filter(grepl("free throw", description)) %>% 
-  mutate(team_shooting = if_else(action_team == "home", home, away)) %>% 
-  group_by(game_id, tournament, referee_1, referee_2, referee_3, action_team,
-           team_shooting) %>% 
-  summarize(n_free_throws = n()) %>% 
-  ungroup() %>% 
-  pivot_wider(names_from = action_team, values_from = n_free_throws,
-              id_cols = game_id) %>% 
-  mutate(foul_disparity = abs(away - home),
-         home_cooking = home - away) %>% 
-  select(game_id, foul_disparity, home_cooking)
-
-
-foul_disparity_games <- foul_disparity_games %>% 
-  left_join(pbp_data_long, by = "game_id")
+#| label: free throw disparity 1
 
 # Mostly pretty low, but there are some kinda crazy disparities
 ggplot(foul_disparity_games, aes(x = foul_disparity)) +
@@ -679,14 +669,99 @@ ggplot(foul_disparity_games, aes(x = foul_disparity)) +
 
 
 foul_disparity_games %>% 
-  arrange(desc(foul_disparity))
+  select(home, away, date, foul_disparity, home_cooking,
+         starts_with("referee")) %>% 
+  mutate(team_favored = if_else(home_cooking > 0, home, away),
+         .after = "foul_disparity") %>% 
+  select(-home_cooking) %>% 
+  arrange(desc(foul_disparity)) %>% 
+  filter(foul_disparity >= 20) %>% 
+  knitr::kable(col.names = c("Home Team", "Away Team", "Date",
+                             "Free Throw Disparity", "Team Benefitting",
+                             "Referee 1", "Referee 2", "Referee 3"))
+# Removing it from here, but every time this happens, the team benefitting wins
+
+ggplot(foul_disparity_games, aes(x = foul_disparity)) +
+  geom_histogram(color = "white", binwidth = 1) +
+  theme_bw() +
+  labs(x = "Absolute Difference in Free Throws", y = "Number of Games",
+       title = "Substantial Free Throw Disparity is Not Uncommon") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+ggplot(foul_disparity_games, aes(x = home_cooking)) +
+  geom_density(fill = "grey", alpha = 0.6) +
+  geom_vline(xintercept = median(foul_disparity_games$home_cooking),
+             linetype = "dashed") +
+  theme_bw() +
+  labs(x = "Home Team Free Throw Advantage", y = "Percent of Games",
+       title = "Home Teams are Slightly Favored in Free Throw Attempts") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_y_continuous(labels = scales::percent_format())
+```
+
+In general, there are not huge disparities in free throws - home teams are slightly favored, but not by extreme margins. However, there have been a handful of games with absolutely massive free throw disparities - and in every one of those games, the team shooting more free throws wins.
+
+```{r}
+#| label: free throw disparity overcome
 
 foul_disparity_games %>% 
-  filter(game_id == 401408616) %>% 
-  arrange(play_id) %>% 
-  select(play_id, half, time_remaining_half, action_team, description) %>% 
-  print(n = 346)
+  mutate(game_winner = if_else(home_score > away_score, home, away)) %>% 
+  select(home, away, game_winner, date, foul_disparity, home_cooking,
+         starts_with("referee")) %>% 
+  mutate(team_favored = if_else(home_cooking > 0, home, away),
+         .after = "foul_disparity") %>% 
+  mutate(team_favored_won = if_else(team_favored == game_winner, TRUE, FALSE)) %>% 
+  arrange(desc(foul_disparity)) %>% 
+  filter(team_favored_won == FALSE) %>% 
+  filter(foul_disparity >= 10) %>% 
+  select(home, away, date, foul_disparity, team_favored, starts_with("referee")) %>% 
+  knitr::kable(col.names = c("Home Team", "Away Team", "Date",
+                             "Free Throw Disparity", "Team Benefitting",
+                             "Referee 1", "Referee 2", "Referee 3"))
 ```
+
+The biggest free throw disparity a team has been able to overcome was 16 (once), followed by 15 (five times) and 14 (three times). Usually, this happens when the away team (i.e., lower seed) is the team benefitting.
+
+```{r}
+#| label: consistent free throw disparities
+
+foul_disparity_games %>% 
+  mutate(game_winner = if_else(home_score > away_score, home, away)) %>% 
+  select(tournament, home, away, foul_disparity, home_cooking) %>% 
+  pivot_longer(c(home, away), names_to = "which_team", values_to = "team") %>% 
+  mutate(was_favored = case_when(
+    which_team == "home" & home_cooking >= 0 ~ TRUE,
+    which_team == "home" & home_cooking < 0 ~ FALSE,
+    which_team == "away" & home_cooking > 0 ~ FALSE,
+    which_team == "away" & home_cooking <= 0 ~ TRUE,
+    TRUE ~ NA
+  )) %>% 
+  mutate(directional_margin = if_else(was_favored == TRUE, foul_disparity,
+                                      -foul_disparity)) %>% 
+  group_by(team) %>% 
+  summarize(success_rate = mean(was_favored),
+            avg_margin = mean(directional_margin),
+            n_games = n()) %>% 
+  filter(n_games >= 5) %>% 
+  arrange(desc(success_rate)) %>% 
+  slice(1:10, 75:84) %>% 
+  mutate(half = if_else(success_rate > .5, "Highest", "Lowest")) %>%
+  mutate(success_rate = paste0(as.character(round(success_rate * 100, 0)), "%")) %>% 
+  knitr::kable(digits = 2, col.names = c("Team", "Games Shooting Plus Free Throws",
+                                         "Average Free Throw Margin",
+                                         "Total Games", "Status"))
+# was_favored returns true if the free throw differential was 0 (i.e., didn't get screwed)
+# Probably best to let this be two tables
+
+
+
+  #mutate(row_n = row_number()) %>% 
+  #filter(team == "Duke")
+# Duke is 21st, with a success rate of 64.5% and an average free throw advantage of 3.68 across 31 games
+```
+
+In general, there are some teams who are routinely shooting more free throws than their opponents, but it isn't necessarily the traditional powerhouse teams we would expect. More notably, Duke is not featured here :)
 
 
 
