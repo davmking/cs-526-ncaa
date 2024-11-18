@@ -397,6 +397,7 @@ game_info_long %>%
 The betting lines have not varied in performance much over time, though they have spread out from massive modes at 0 in earlier years. We can see, in a very minor trend in the table, that in recent years betting lines have moved from overestimating higher seeds to underestimating them.
 
 ```{r}
+#| label: over under overtime games
 
 over_under_meds <- game_info_long %>% 
   filter(!is.na(over_under)) %>% 
@@ -662,11 +663,6 @@ We can see there are some referees who frequently officiate games in which a dis
 
 ```{r}
 #| label: free throw disparity 1
-
-# Mostly pretty low, but there are some kinda crazy disparities
-ggplot(foul_disparity_games, aes(x = foul_disparity)) +
-  geom_histogram(color = "white", binwidth = 1)
-
 
 foul_disparity_games %>% 
   select(home, away, date, foul_disparity, home_cooking,
