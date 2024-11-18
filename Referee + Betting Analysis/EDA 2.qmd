@@ -185,13 +185,16 @@ fouls_df %>%
   ggplot(aes(x = fouls_per_game_season, y = fouls_per_game_tournament)) +
   geom_point(alpha = 0.6, aes(color = year)) +
   geom_smooth(method = "lm", se = FALSE) +
-  geom_abline(intercept = 0, slope = 1, lwd = 1, color = "red") +
+  geom_abline(intercept = 0, slope = 1, lwd = 1, color = "black",
+              linetype = "dashed") +
   geom_label_repel(aes(label = if_else(fouls_per_game_season > 19 &
                                   fouls_per_game_tournament > 25,
                                 school_label,
                                 NA),
                        fill = year),
-                   min.segment.length = 0) +
+                   min.segment.length = 0,
+                   color = "grey40",
+                   fontface = "bold") +
   theme_bw() +
   labs(x = "Fouls Per Game (Regular Season)",
        y = "Fouls Per Game (NCAA Tournament)",
@@ -200,8 +203,8 @@ fouls_df %>%
        fill = "Year") +
   theme(plot.title = element_text(hjust = 0.5),
         legend.position = "bottom") +
-  scale_color_viridis(discrete = TRUE) +
-  scale_fill_viridis(discrete = TRUE)
+  scale_color_viridis(discrete = TRUE, direction = -1) +
+  scale_fill_viridis(discrete = TRUE, direction = -1)
 # Are they calling fewer fouls these days?
 
 

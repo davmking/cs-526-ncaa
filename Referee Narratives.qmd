@@ -13,6 +13,7 @@ library(tidytext)
 library(tidymodels)
 library(viridis)
 library(ggrepel)
+library(ggridges)
 library(randomForest)
 ```
 
@@ -414,4 +415,192 @@ In general, bettors set the over/under for games a little bit higher than is ach
 # Poll Data
 
 The question: Do the analytics predict everything? Can the experts tell us things that the analytics maybe can't?
+
+The answer: Strictly speaking, more or less yes. The most useful metrics are the actual performance metrics, not the preseason polls or anything of that sort. However, if you want to look at polls themselves, the early season polls (perhaps after a couple weeks, to avoid the truly bad insights) are actually the most predictive, suggesting that there is some merit in incorporating prior beliefs into NCAA tournament predictions.
+
+## Part 1: Do Polls Out-Perform General Performance Metrics?
+
+In this part, we ask whether polls can be better predictors of tournament outcomes than simple predictors such as win/loss, strength of schedule, or the simple rating system (basically, point differential weighted by SOS).
+
+```{r}
+#| label: random forest plots
+
+set.seed(526)
+rf_all_wins <- randomForest(total_wins ~ .-tournament_round,
+                            data = tournament_preds_fct_all,
+                            importance = TRUE)
+set.seed(526)
+rf_all_round <- randomForest(tournament_round ~ .-total_wins,
+                             data = tournament_preds_fct_all,
+                             importance = TRUE)
+
+varImpPlot(rf_all_wins,
+           main = "Strongest Predictors for Total Wins")
+varImpPlot(rf_all_round,
+           main = "Strongest Predictors for Tournament Round")
+```
+
+For total wins, the strongest predictors (i.e., MSE) are simple rating system, win/loss record, SOS, and then home, conference, and away win/loss record. However, the strongest differentiators (i.e., purity) keep the top 3 intact, but then go pre-tournament AP, and week 3/4 coaches poll. This suggests that record-based metrics are the best at predicting the number of wins a team will get, but when it comes to differentiating teams, polls still hold some weight.
+
+For tournament round, the strongest predictors (i.e., accuracy) remain the same: simple rating systme, SOS, and win/loss record. However, week 16 coaches poll, preseason coaches poll, and week 3/4 AP poll are the next best predictors. The strongest differentiators (i.e., Gini) are the same in the first three, but then turn to away, home, and conference win/loss record. This is the opposite pattern from the total wins. This once again suggests that polls can provide some information on how far a team is expected to go in march madness.
+
+## Part 2: Which Polls are Best?
+
+```{r}
+#| label: all polls RF
+
+set.seed(526)
+rf_all_polls_wins <- randomForest(total_wins ~ .-tournament_round,
+                                  data = tournament_preds_fct_reduced_2,
+                                  importance = TRUE)
+varImpPlot(rf_all_polls_wins)
+
+set.seed(526)
+rf_all_polls_round <- randomForest(tournament_round ~ .-total_wins,
+                                  data = tournament_preds_fct_reduced_2,
+                                  importance = TRUE)
+varImpPlot(rf_all_polls_round)
+```
+
+For total wins, the strongest predictors are the week 3/4 AP polls, preseason coaches poll, pre-tournament AP poll, and week 3/4 coaches poll. This indication that early-season polls are the most predictive makes sense to me: pre-season, you have prior beliefs of how good each team is capable of being. However, you don't know which teams are going to fall completely flat of their pre-season expectations. By waiting a couple weeks, you can remove the teams who are drastically underperforming, without waiting so long that you see talented teams do something stupid and overreact. For purity, week 16 coaches, week 3 coaches, pre-tournaent AP, week 4 (both), and pre-tournament coaches are the strongest predictors. Therefore, while our predictions may be best from the early-season polls, late-season polls help us to minimize RSS and better differentiate between teams. This makes a lot of sense - you can get broad interpretations of which schools are best pre-season, and refine predictions with late-season polls.
+
+For tournament round, it is a similar story, the strongest predictors are preseason (both), week 3/4 (AP), week 16 (oth) and week 3/4 (coaches). This is the same general pattern, then, as before - we see early and late season polls come into play, while mid-season polls are not particularly predictive. Looking at Gini, it is somewhat similar: week 16 (both), pre-tournament (both), week 4 (both), and then later-season coaches polls are the most useful. 
+
+
+## Part 3: Which AP Polls are Best?
+
+```{r}
+#| label: just ap polls
+
+set.seed(526)
+rf_ap_wins <- randomForest(total_wins ~ .-tournament_round,
+                           data = tpfr_ap,
+                           importance = TRUE)
+varImpPlot(rf_ap_wins)
+
+set.seed(526)
+rf_ap_round <- randomForest(tournament_round ~ .-total_wins,
+                            data = tpfr_ap,
+                            importance = TRUE)
+varImpPlot(rf_ap_round)
+```
+
+For wins, there are five clear front-runners (depending on metric): preseason, pre-tournament, and week 4 (both), week 3 (MSE), and week 16 (purity). For round, this set of polls is almost exactly the same, except the preseason AP poll is not as good at differentiating in the Gini index.
+
+
+## Part 4: Which Coaches Polls are Best?
+
+```{r}
+#| label: just coaches polls
+
+set.seed(526)
+rf_coaches_wins <- randomForest(total_wins ~ .-tournament_round,
+                           data = tpfr_coaches,
+                           importance = TRUE)
+varImpPlot(rf_coaches_wins)
+
+set.seed(526)
+rf_coaches_round <- randomForest(tournament_round ~ .-total_wins,
+                            data = tpfr_coaches,
+                            importance = TRUE)
+varImpPlot(rf_coaches_round)
+```
+
+For wins, there are six clear front-runners: preseason, week 3/4, and pre-tournament (both), week 11 (MSE), and week 16 (purity). For round, results are a little more diffuse, but it is generally the same pattern - Gini emphasizes late season polls more, while accuracy favors early season polls. In fact, in this situation, pre-season coaches poll is the single best predictor (by like a lot) for accuracy.
+
+
+# Fouls
+
+```{r}
+#| label: fouls per game over time
+
+fouls_df %>% 
+  mutate(school_label = paste0(school_clean_dict, " (", year, ")")) %>% 
+  ggplot(aes(x = fouls_per_game_season, y = fouls_per_game_tournament)) +
+  geom_point(alpha = 0.6, aes(color = year)) +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_abline(intercept = 0, slope = 1, lwd = 1, color = "black",
+              linetype = "dashed") +
+  geom_label_repel(aes(label = if_else(fouls_per_game_season > 19 &
+                                  fouls_per_game_tournament > 25,
+                                school_label,
+                                NA),
+                       fill = year),
+                   min.segment.length = 0,
+                   color = "grey40",
+                   fontface = "bold") +
+  theme_bw() +
+  labs(x = "Fouls Per Game (Regular Season)",
+       y = "Fouls Per Game (NCAA Tournament)",
+       title = "Fouls Per Game: Tournament vs. Regular Season",
+       color = "Year",
+       fill = "Year") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_color_viridis(discrete = TRUE, direction = -1) +
+  scale_fill_viridis(discrete = TRUE, direction = -1)
+```
+
+Generally speaking, referees are predicted to call ever so slightly more fouls per game in the tournament than in the regular season, most notably among teams that are already more foul-prone. This graph also suggests the possibility that fewer fouls are being called in more recent tournaments than in earlier tournaments, which we investigate next.
+
+```{r}
+#| label: foul calls over time
+
+fouls_df %>% 
+  select(year, fouls_per_game_season, fouls_per_game_tournament) %>% 
+  rename(Season = fouls_per_game_season,
+         Tournament = fouls_per_game_tournament) %>% 
+  pivot_longer(-year) %>% 
+  group_by(year, name) %>% 
+  summarize(avg_fouls = mean(value)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = year, y = avg_fouls)) +
+  geom_col() +
+  facet_wrap(~name) +
+  theme_bw() +
+  labs(x = "Season", y = "Average Fouls Per Game",
+       title = "Referees Are Calling Fewer Fouls Over Time") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_x_discrete(breaks = seq(2014, 2024, by = 2)) +
+  coord_cartesian(ylim = c(15, 19))
+```
+
+In general, referees are calling fewer fouls over time, both in the regular season and in the NCAA tournament. Note that this graph is somewhat misleading - fouls per game have come down from ~18 in 2014 to ~16 in 2024. It's worth noting that in the 2022 season, regular-seaosn fouls were at their lowest in since 2014, but NCAA tournament fouls did not keep up with that. We see the disparity in these foul calls over time below.
+
+```{r}
+#| label: foul call difference over time
+
+fouls_df %>% 
+  mutate(foul_diff = fouls_per_game_tournament - fouls_per_game_season) %>% 
+  group_by(year) %>% 
+  summarize(Mean = mean(foul_diff),
+            Median = median(foul_diff),
+            #n_games = n(),
+            mean_fouls_tournament = mean(n_fouls / n_games)) %>% 
+  ungroup() %>% 
+  pivot_longer(c(Mean, Median), names_to = "stat", values_to = "diff") %>% 
+  ggplot(aes(x = year, y = diff, fill = mean_fouls_tournament)) +
+  geom_col() +
+  facet_wrap(~stat) +
+  theme_bw() +
+  labs(x = "Tournament", y = "Surplus Fouls in Tournament",
+       title = "Referees Call Slightly More Fouls in NCAAT, On Average",
+       fill = "Average Fouls per Team per Game") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  scale_fill_viridis(direction = -1, breaks = seq(16, 19)) +
+  scale_x_discrete(breaks = seq(2014, 2024, by = 2))
+
+
+fouls_df %>% 
+  mutate(foul_diff = fouls_per_game_tournament - fouls_per_game_season) %>% 
+  ggplot(aes(x = foul_diff, y = year)) +
+  geom_density_ridges(alpha = 0.5) +
+  theme_bw() +
+  labs(x = "Surplus Fouls in Tournament", y = "Year",
+       title = "In General, Referees Call Similar Fouls in Regular Season and Tournament") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+In general, fouls in the tournament and fouls in the regular season are actually very closely aligned - they are almost always within a foul per game (per team) of one another. I am curious what changed from 2019/2021 to 2022 - 2022 saw a huge spike in surplus fouls called, following a couple years of that metric being down.
 
