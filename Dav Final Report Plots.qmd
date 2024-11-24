@@ -1,0 +1,425 @@
+---
+title: "Dav Final Report Plots"
+format: html
+---
+
+# Libraries and Data
+
+```{r}
+#| label: libraries
+
+library(tidyverse)
+library(tidytext)
+library(tidymodels)
+library(viridis)
+library(ggrepel)
+library(ggridges)
+library(randomForest)
+library(patchwork)
+```
+
+```{r}
+#| label: load data
+
+basic_stats <- read.csv("FeatureElimination/Basic_Stats.csv") %>% 
+  janitor::clean_names() %>%
+  mutate(school_clean = if_else(
+    str_detect(school, "NCAA"),
+    substring(school, 1, nchar(school) - 5),
+    school
+  ), .after = school) %>% 
+    mutate(school_clean_dict = case_when(
+    school_clean == "Abilene Christian" ~ "Abilene Chrstn",
+    school_clean == "Albany (NY)" ~ "UAlbany",
+    school_clean == "Appalachian State" ~ "App State",
+    school_clean == "Arizona State" ~ "Arizona St",
+    school_clean == "Boise State" ~ "Boise St",
+    school_clean == "Brigham Young" ~ "BYU",
+    school_clean == "Cal State Bakersfield" ~ "Bakersfield",
+    school_clean == "Cal State Fullerton" ~ "Fullerton",
+    school_clean == "Cleveland State" ~ "Cleveland St",
+    school_clean == "Coastal Carolina" ~ "Coastal Car",
+    school_clean == "College of Charleston" ~ "Charleston",
+    school_clean == "Colorado State" ~ "Colorado St",
+    school_clean == "Connecticut" ~ "UConn",
+    school_clean == "East Tennessee State" ~ "ETSU",
+    school_clean == "Eastern Kentucky" ~ "E Kentucky",
+    school_clean == "Eastern Washington" ~ "E Washington",
+    school_clean == "FDU" ~ "Fair Dickinson",
+    school_clean == "Florida Atlantic" ~ "FAU",
+    school_clean == "Florida Gulf Coast" ~ "FGCU",
+    school_clean == "Florida State" ~ "Florida St",
+    school_clean == "Fresno State" ~ "Fresno St",
+    school_clean == "George Washington" ~ "G Washington",
+    school_clean == "Georgia State" ~ "Georgia St",
+    school_clean == "Hawaii" ~ "Hawai'i",
+    school_clean == "Jacksonville State" ~ "Jax State",
+    school_clean == "Kansas State" ~ "Kansas St",
+    school_clean == "Kennesaw State" ~ "Kennesaw St",
+    school_clean == "Long Beach State" ~ "Long Beach St",
+    school_clean == "Louisiana State" ~ "LSU",
+    school_clean == "Loyola (IL)" ~ "Loyola Chicago",
+    school_clean == "Maryland-Baltimore County" ~ "UMBC",
+    school_clean == "Massachusetts" ~ "UMass",
+    school_clean == "McNeese State" ~ "McNeese",
+    school_clean == "Miami (FL)" ~ "Miami", # NOTE: May need to exclude
+    school_clean == "Michigan State" ~ "Michigan St",
+    school_clean == "Middle Tennessee" ~ "MTSU",
+    school_clean == "Mississippi" ~ "Ole Miss",
+    school_clean == "Mississippi State" ~ "Mississippi St",
+    school_clean == "Montana State" ~ "Montana St",
+    school_clean == "Morehead State" ~ "Morehead St",
+    school_clean == "Mount St. Mary's" ~ "Mount St Marys",
+    school_clean == "Murray State" ~ "Murray St",
+    school_clean == "New Mexico State" ~ "New Mexico St",
+    school_clean == "Norfolk State" ~ "Norfolk St",
+    school_clean == "North Carolina Central" ~ "NC Central",
+    school_clean == "North Dakota State" ~ "N Dakota St",
+    school_clean == "Northern Kentucky" ~ "N Kentucky",
+    school_clean == "Oklahoma State" ~ "Oklahoma St",
+    school_clean == "Oregon State" ~ "Oregon St",
+    school_clean == "Pennsylvania" ~ "Penn",
+    school_clean == "Pittsburgh" ~ "Pitt",
+    school_clean == "Saint Mary's (CA)" ~ "Saint Mary's",
+    school_clean == "San Diego State" ~ "San Diego St",
+    school_clean == "South Dakota State" ~ "S Dakota St",
+    school_clean == "Southeast Missouri State" ~ "SE Missouri",
+    school_clean == "Southern California" ~ "USC",
+    school_clean == "Southern Methodist" ~ "SMU",
+    school_clean == "St. Bonaventure" ~ "St Bonaventure",
+    school_clean == "St. John's (NY)" ~ "St John's",
+    school_clean == "Stephen F. Austin" ~ "SF Austin",
+    school_clean == "Texas A&M-Corpus Christi" ~ "Texas A&M-CC",
+    school_clean == "Virginia Commonwealth" ~ "VCU",
+    school_clean == "Washington State" ~ "Washington St",
+    school_clean == "Weber State" ~ "Weber St",
+    school_clean == "Western Kentucky" ~ "Western KY",
+    school_clean == "Western Michigan" ~ "W Michigan",
+    school_clean == "Wichita State" ~ "Wichita St",
+    school_clean == "Wright State" ~ "Wright St",
+    TRUE ~ school_clean
+  ), .after = school_clean) %>% 
+  filter(!(school_clean %in% c("Long Island University",
+                               "New Orleans",
+                               "Wake Forest"))) %>% 
+  mutate(year = factor(year)) %>% 
+  mutate(conf_w_l = conf_wins / (conf_wins + conf_losses),
+         .after = "conf_losses") %>% 
+  mutate(home_w_l = home_wins / (home_wins + home_losses),
+         .after = "home_losses") %>% 
+  mutate(away_w_l = away_wins / (away_wins + away_losses),
+         .after = "away_losses")
+# Basic stats missing UCSB for some reason
+
+load("data/game_info.RData")
+load("data/pbp_data.RData")
+
+pbp_data_long <- data.frame(pbp_data[["pbp_2024"]])
+
+for(i in 2:length(pbp_data)){
+  pbp_data_long <- rbind(pbp_data_long, pbp_data[[i]])
+}
+
+pbp_data_long <- pbp_data_long %>% 
+  mutate(tournament = year(date), .after = "game_id") %>% 
+  mutate(tournament = factor(tournament))
+
+
+game_info_long <- data.frame(game_info[["game_info_2024"]])
+
+for(i in 2:length(game_info)){
+  game_info_long <- rbind(game_info_long, game_info[[i]])
+}
+
+game_info_long <- game_info_long %>% 
+  mutate(tournament = year(date), .before = "date") %>% 
+  mutate(tournament = factor(tournament))
+
+tournament_fouls <- pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("foul on", description)) %>% 
+  mutate(team_on = case_when(
+    action_team == "home" ~ home,
+    action_team == "away" ~ away,
+    TRUE ~ NA
+  ), team_on_seed = case_when(
+    action_team == "home" ~ home_seed,
+    action_team == "away" & away_seed <= 16 ~ away_seed,
+    TRUE ~ NA
+  )) %>% 
+  group_by(tournament, team_on) %>% 
+  summarize(n_fouls = n(),
+            n_games = n_distinct(game_id),
+            team_on_seed = max(team_on_seed)) %>% 
+  ungroup() %>% 
+  mutate(fouls_per_game_tournament = n_fouls / n_games)
+
+
+fouls_df <- basic_stats %>% 
+  group_by(year, school_clean_dict) %>% 
+  summarize(fouls = pf,
+            fouls_per_game_season = pf / games_played) %>% 
+  ungroup() %>% 
+  mutate(year = factor(year)) %>% 
+  right_join(tournament_fouls, by = c("year" = "tournament",
+                                      "school_clean_dict" = "team_on")) %>% 
+  filter(!is.na(fouls) & school_clean_dict != "Miami")
+
+
+foul_diff_df <- pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("foul on", description)) %>% 
+  mutate(team_on = case_when(
+    action_team == "home" ~ home,
+    action_team == "away" ~ away,
+    TRUE ~ NA
+  ), team_on_seed = case_when(
+    action_team == "home" ~ home_seed,
+    action_team == "away" & away_seed <= 16 ~ away_seed,
+    TRUE ~ NA
+  )) %>% 
+  group_by(game_id, tournament, team_on, team_on_seed) %>% 
+  summarize(n_fouls = n()) %>% 
+  ungroup() %>% 
+  left_join(basic_stats %>% mutate(year = factor(year)),
+            by = c("tournament" = "year", 
+                                "team_on" = "school_clean_dict")) %>% 
+  mutate(avg_fouls_season = pf / games_played,
+         foul_diff = n_fouls - avg_fouls_season) %>% 
+  left_join(game_info_long %>% select(game_id, starts_with("referee")),
+            by = "game_id")
+
+ref_counts <- game_info_long %>% 
+  select(starts_with("referee")) %>% 
+  pivot_longer(everything(), values_to = "referee") %>% 
+  group_by(referee) %>% 
+  summarize(total_games_reffed = n()) %>% 
+  ungroup()
+
+refs_of_interest <- foul_diff_df %>% 
+  select(tournament, team_on, team_on_seed, n_fouls, avg_fouls_season, foul_diff,
+         starts_with("referee")) %>% 
+  pivot_longer(starts_with("referee"), names_to = "ref_id",
+               values_to = "referee") %>% 
+  filter(!is.na(foul_diff)) %>% 
+  group_by(referee) %>% 
+  summarize(mean_diff = mean(foul_diff),
+            mean_abs_diff = mean(abs(foul_diff))) %>% 
+  ungroup() %>% 
+  left_join(ref_counts, by = "referee") %>% 
+  filter(total_games_reffed > 2) %>% 
+  arrange(desc(abs(mean_diff))) %>% 
+  head(20) %>% 
+  pull(referee)
+
+load("data/ap_polls.RData")
+load("data/coaches_polls.RData")
+
+tournament_winners <- game_info_long %>% 
+  group_by(tournament) %>% 
+  slice_max(date) %>% 
+  ungroup() %>% 
+  mutate(winner = if_else(score_diff > 0, home, away)) %>% 
+  select(tournament, winner)
+
+# For the sake of argument, let's filter out the first four games
+tournament_wins <- game_info_long %>% 
+  pivot_longer(c("home", "away"), names_to = "which_team",
+               values_to = "school") %>% 
+  filter(arena_location != "Dayton, OH" & date != "2021-03-18") %>% 
+  group_by(tournament, school) %>% 
+  summarize(n_games = n()) %>% 
+  ungroup() %>% 
+  left_join(tournament_winners, by = "tournament") %>% 
+  mutate(won_natty = if_else(school == winner, TRUE, FALSE)) %>% 
+  select(-winner) %>% 
+  mutate(total_wins = n_games + won_natty - 1) %>% 
+  mutate(tournament_round = case_when(
+    total_wins == 0 ~ "R64",
+    total_wins == 1 ~ "R32",
+    total_wins == 2 ~ "S16",
+    total_wins == 3 ~ "E8",
+    total_wins == 4 ~ "F4",
+    total_wins == 5 ~ "Runner-Up",
+    total_wins == 6 ~ "Champion",
+    TRUE ~ NA
+  )) %>% 
+  mutate(tournament_round = factor(tournament_round, levels = c("R64", "R32",
+                                                                "S16", "E8",
+                                                                "F4",
+                                                                "Runner-Up",
+                                                                "Champion")))
+
+tournament_preds <- tournament_wins %>% 
+  left_join(basic_stats, by = c("tournament" = "year",
+                                "school" = "school_clean_dict")) %>% 
+  left_join(ap_polls, by = c("tournament" = "year",
+                             "school" = "school_dict")) %>% 
+  left_join(coaches_polls, by = c("tournament" = "year",
+                                  "school" = "school_dict"),
+            suffix = c("_ap", "_coaches"))
+
+tournament_preds_fct <- tournament_preds %>% 
+  mutate(across(c(starts_with("week_"), pre_ap, final_ap,
+                  pre_coaches, final_coaches), ~ case_when(
+    . < 5 ~ "1-5",
+    . < 10 ~ "6-10",
+    . < 15 ~ "11-15",
+    . < 20 ~ "16-20",
+    . < 25 ~ "21-25",
+    is.na(.) ~ "Unranked",
+    TRUE ~ NA
+  ))) %>% 
+  mutate(across(c(starts_with("week_"), pre_ap, final_ap,
+                  pre_coaches, final_coaches), ~ factor(., levels = c("1-5", "6-10",
+                                                             "11-15", "16-20",
+                                                             "21-25", "Unranked",
+                                                             NA))))
+
+tournament_preds_fct <- tournament_preds_fct %>% 
+  mutate(pre_tournament_ap = case_when(
+    tournament == 2021 ~ week_16_ap,
+    tournament %in% c(2015, 2016, 2017, 2018, 2022, 2023) ~ week_18_ap,
+    tournament %in% c(2014, 2019) ~ week_19_ap,
+    tournament == 2024 ~ week_20_ap,
+    TRUE ~ NA
+  ), .before = "final_ap") %>% 
+  mutate(pre_tournament_coaches = case_when(
+    tournament == 2021 ~ week_16_coaches,
+    tournament %in% c(2018, 2022) ~ week_18_coaches,
+    tournament %in% c(2015, 2016, 2017, 2019, 2023) ~ week_19_coaches,
+    tournament %in% c(2014, 2024) ~ week_20_coaches,
+    TRUE ~ NA
+  ), .before = "final_coaches") 
+
+tournament_preds_fct_reduced <- tournament_preds_fct %>% 
+  select(total_wins, tournament_round, starts_with("week_"),
+                pre_ap, final_ap,
+                pre_coaches, final_coaches,
+                pre_tournament_ap, pre_tournament_coaches) %>% 
+  dplyr::select(-starts_with(c("week_17", "week_18", "week_19", "week_20"))) %>% 
+  na.omit()
+
+tournament_preds_fct_reduced_2 <- tournament_preds_fct_reduced %>% 
+  dplyr::select(-starts_with("final"))
+
+tpfr_ap <- tournament_preds_fct_reduced_2 %>% 
+  dplyr::select(!ends_with("coaches"))
+
+tpfr_coaches <- tournament_preds_fct_reduced_2 %>% 
+  dplyr::select(!ends_with("ap"))
+
+foul_disparity_games <- pbp_data_long %>% 
+  mutate(description = str_to_lower(description)) %>% 
+  filter(grepl("free throw", description)) %>% 
+  mutate(team_shooting = if_else(action_team == "home", home, away)) %>% 
+  group_by(game_id, tournament, referee_1, referee_2, referee_3, action_team,
+           team_shooting) %>% 
+  summarize(n_free_throws = n()) %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = action_team, values_from = n_free_throws,
+              id_cols = game_id) %>% 
+  mutate(foul_disparity = abs(away - home),
+         home_cooking = home - away) %>% 
+  select(game_id, foul_disparity, home_cooking)
+
+
+foul_disparity_games <- foul_disparity_games %>% 
+  left_join(game_info_long, by = "game_id")
+
+
+tournament_preds_fct_all <- tournament_preds_fct %>% 
+  select(total_wins, tournament_round, starts_with("week_"),
+                pre_ap, final_ap,
+                pre_coaches, final_coaches,
+                pre_tournament_ap, pre_tournament_coaches,
+         simple_rating_system, strength_of_schedule,
+         w_l, conf_w_l, home_w_l, away_w_l) %>% 
+  select(-starts_with(c("week_17", "week_18", "week_19", "week_20"))) %>% 
+  select(-starts_with("final")) %>% 
+  na.omit()
+```
+
+
+# Random Forest Plots
+
+```{r}
+#| label: RF vImp plots
+
+set.seed(526)
+rf_all_wins <- randomForest(total_wins ~ .-tournament_round,
+                            data = tournament_preds_fct_all,
+                            importance = TRUE)
+
+set.seed(526)
+rf_all_polls_wins <- randomForest(total_wins ~ .-tournament_round,
+                                  data = tournament_preds_fct_reduced_2,
+                                  importance = TRUE)
+
+par(mfrow = c(1, 2))
+
+varImpPlot(rf_all_wins,
+           n.var = 10, type = 1,
+           main = "Strongest Predictors for Total Wins")
+mtext("Figure A.1.a")
+varImpPlot(rf_all_polls_wins,
+           n.var = 6, type = 1,
+           main = "Strongest Predictors for Total Wins among Polls")
+mtext("Figure A.1.b")
+```
+
+# Referee Plots
+
+```{r}
+#| label: foul call difference over time
+
+a2b <- fouls_df %>% 
+  mutate(foul_diff = fouls_per_game_tournament - fouls_per_game_season) %>% 
+  group_by(year) %>% 
+  summarize(Mean = mean(foul_diff),
+            Median = median(foul_diff),
+            #n_games = n(),
+            mean_fouls_tournament = mean(n_fouls / n_games)) %>% 
+  ungroup() %>% 
+  pivot_longer(c(Mean, Median), names_to = "stat", values_to = "diff") %>% 
+  ggplot(aes(x = year, y = diff, fill = mean_fouls_tournament)) +
+  geom_col() +
+  facet_wrap(~stat) +
+  theme_bw() +
+  labs(x = "Tournament", y = "Tournament: Fouls Above Season Average",
+       title = "There Are No Clear Patterns In Foul Disparity Over Time",
+       subtitle = "Figure A.2.b",
+       fill = "Average Fouls per Team per Game",
+       caption = "Data from 2014-2024") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        legend.position = "bottom",
+        panel.grid = element_blank()) +
+  scale_fill_viridis(direction = -1, breaks = seq(16, 19)) +
+  scale_x_discrete(breaks = seq(2014, 2024, by = 2))
+
+
+a2a <- fouls_df %>% 
+  mutate(foul_diff = fouls_per_game_tournament - fouls_per_game_season) %>% 
+  group_by(year) %>% 
+  mutate(mean_fouls_tournament = mean(n_fouls / n_games)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = foul_diff, y = year, fill = mean_fouls_tournament)) +
+  geom_density_ridges(alpha = 0.7) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() +
+  labs(x = "Tournament: Fouls Above Season Average", y = "Year",
+       title = "Referees Call Fouls Similarly in Regular Season and Tournament",
+       subtitle = "Figure A.2.a",
+       caption = "Data from 2014-2024",
+       fill = "Average Fouls Per Team Per Game") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        legend.position = "bottom",
+        panel.grid = element_blank()) +
+  scale_fill_viridis(direction = -1, breaks = seq(16, 19))
+
+a2a + a2b
+```
+
+
