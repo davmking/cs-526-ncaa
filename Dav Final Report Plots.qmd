@@ -366,6 +366,44 @@ varImpPlot(rf_all_polls_wins,
            n.var = 6, type = 1,
            main = "Strongest Predictors for Total Wins among Polls")
 mtext("Figure A.1.b")
+
+importance_all <- importance(rf_all_wins) %>% 
+  as.data.frame() %>% 
+  select(`%IncMSE`) %>% 
+  arrange(desc(`%IncMSE`)) %>% 
+  head(10) 
+
+rf1 <- ggplot(importance_all, aes(x = `%IncMSE`,
+                           y = reorder(rownames(importance_all),
+                                       `%IncMSE`))) +
+  geom_col() +
+  theme_bw() +
+  labs(x = "MSE Increase %", y = "Predictor",
+       title = "Strongest Win\nPredictors",
+       subtitle = "Figure A.1.a") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        panel.grid = element_blank())
+
+importance_polls <- importance(rf_all_polls_wins) %>% 
+  as.data.frame() %>% 
+  select(`%IncMSE`) %>% 
+  arrange(desc(`%IncMSE`)) %>% 
+  head(6) 
+
+rf2 <- ggplot(importance_polls, aes(x = `%IncMSE`,
+                           y = reorder(rownames(importance_polls),
+                                       `%IncMSE`))) +
+  geom_col() +
+  theme_bw() +
+  labs(x = "MSE Increase %", y = "Predictor",
+       title = "Strongest Win\nPredictors (Polls)",
+       subtitle = "Figure A.1.b") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        panel.grid = element_blank())
+
+rf1 + rf2
 ```
 
 # Referee Plots
@@ -387,7 +425,7 @@ a2b <- fouls_df %>%
   facet_wrap(~stat) +
   theme_bw() +
   labs(x = "Tournament", y = "Tournament: Fouls Above Season Average",
-       title = "There Are No Clear Patterns In Foul Disparity Over Time",
+       title = "There Are No Clear Patterns In\nFoul Disparity Over Time",
        subtitle = "Figure A.2.b",
        fill = "Average Fouls per Team per Game",
        caption = "Data from 2014-2024") +
@@ -408,24 +446,27 @@ a2a <- fouls_df %>%
   geom_density_ridges(alpha = 0.7) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   theme_bw() +
-  labs(x = "Tournament: Fouls Above Season Average", y = "Year",
-       title = "Referees Call Fouls Similarly in Regular Season and Tournament",
+  labs(x = "NCAAT Fouls Above Season Avg", y = "Year",
+       title = "Referees Call Fouls Similarly in\nReg. Season and NCAAT",
        subtitle = "Figure A.2.a",
        caption = "Data from 2014-2024",
-       fill = "Average Fouls Per Team Per Game") +
+       fill = "Average\nFouls\nPer\nTeam\nPer\nGame") +
   theme(plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5),
-        legend.position = "bottom",
+        legend.position = "right",
         panel.grid = element_blank()) +
   scale_fill_viridis(direction = -1, breaks = seq(16, 19))
 
 a2a + a2b
+
+
+rf1 + rf2 + a2a # combined-plot-1
 ```
 
 ```{r}
 #| label: refs of interest plot
 
-foul_diff_df %>% 
+ref_plot <- foul_diff_df %>% 
   pivot_longer(starts_with("referee"), values_to = "referee") %>% 
   filter(referee %in% refs_of_interest) %>% 
   group_by(referee) %>% 
@@ -441,20 +482,25 @@ foul_diff_df %>%
   ggplot(aes(x = foul_diff, fill = n_games)) +
   geom_density(alpha = 0.6) +
   geom_vline(xintercept = 0, linetype = "dashed") +
-  facet_wrap(~reorder(name_label, mean_diff), scales = "free_y") +
+  facet_wrap(~reorder(name_label, mean_diff), scales = "free_y",
+             nrow = 3) +
   theme_bw() +
   labs(x = "Surplus Fouls in Tourrnament", y = "Percent of Games",
-       fill = "Number of Games Officiated",
+       fill = "Number\nof\nGames\nOfficiated",
        title = "Officials Whose Games Frequently Vary From Regular-Season Expectations",
        subtitle = "Numbers represent mean deviation from regular-season fouls\nFigure A.3",
        caption = "Data from 2014-2024") +
   theme(panel.grid = element_blank(),
-        legend.position = "bottom",
+        legend.position = "right",
         plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5)) +
   scale_fill_viridis(direction = -1) +
   scale_y_continuous(labels = scales::percent_format(), breaks = seq(0, .2, .1)) +
   scale_x_continuous(breaks = seq(-10, 10, by = 10))
+
+a2b + ref_plot + plot_layout(widths = c(2, 5)) # combined-plot-2
+
+ref_plot
 ```
 
 
@@ -465,7 +511,7 @@ a4a <- ggplot(foul_disparity_games, aes(x = foul_disparity)) +
   geom_histogram(color = "white", binwidth = 1) +
   theme_bw() +
   labs(x = "Absolute Difference in Free Throws", y = "Number of Games",
-       title = "Substantial Free Throw Disparity is Not Uncommon",
+       title = "Substantial Free Throw Disparity\nis Not Uncommon",
        subtitle = "Figure A.4.a",
        caption = "Data from 2014-2024") +
   theme(plot.title = element_text(hjust = 0.5),
@@ -478,7 +524,7 @@ a4b <- ggplot(foul_disparity_games, aes(x = home_cooking)) +
              linetype = "dashed") +
   theme_bw() +
   labs(x = "Higher Seed Free Throw Advantage", y = "Percent of Games",
-       title = "Higher Seeds are Slightly Favored in Free Throw Attempts",
+       title = "Higher Seeds are Favored\nin Free Throw Attempts",
        subtitle = "Figure A.4.b",
        caption = "Data from 2014-2024") +
   theme(plot.title = element_text(hjust = 0.5),
@@ -486,7 +532,7 @@ a4b <- ggplot(foul_disparity_games, aes(x = home_cooking)) +
         panel.grid = element_blank()) +
   scale_y_continuous(labels = scales::percent_format())
 
-a4a + a4b
+a2b + a4a + a4b # combined-plot-3
 ```
 
 
